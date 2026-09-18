@@ -13,7 +13,15 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
+  # Die HACS-Pruefung holt hacs.json und manifest.json unangemeldet von
+  # raw.githubusercontent.com. Bei einem privaten Repository antwortet
+  # das mit 404, und HACS meldet daraufhin "invalid hacs.json" und
+  # "expected a dictionary. Got None" - obwohl beide Dateien in Ordnung
+  # sind; hassfest prueft manifest.json aus dem Checkout und ist
+  # zufrieden. Deshalb laeuft dieser Job erst, wenn das Repository
+  # oeffentlich ist. Dann greift er von selbst wieder.
   hacs:
+    if: ${{ github.event.repository.private == false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
