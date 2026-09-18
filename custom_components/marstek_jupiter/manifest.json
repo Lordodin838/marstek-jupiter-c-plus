@@ -1,0 +1,14 @@
+{
+  "domain": "marstek_jupiter",
+  "name": "Marstek Jupiter C+",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/DEIN-GITHUB-NAME/marstek-jupiter-c-plus",
+  "integration_type": "device",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/DEIN-GITHUB-NAME/marstek-jupiter-c-plus/issues",
+  "loggers": ["custom_components.marstek_jupiter"],
+  "requirements": [],
+  "version": "1.0.0"
+}

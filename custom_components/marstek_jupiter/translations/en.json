@@ -1,0 +1,220 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek Jupiter C+",
+        "description": "IP address of the RS485-to-WiFi bridge (Elfin EW11/EE11). The bridge must be set to 115200 baud, 8/None/1, Modbus protocol, half duplex, TCP server, port 502.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "unit_id": "Modbus unit ID",
+          "adopt_legacy": "Adopt existing entity IDs"
+        },
+        "data_description": {
+          "adopt_legacy": "Takes over the IDs of a previous YAML setup so that history, statistics, dashboards and automations keep working. The old package must be removed and Home Assistant restarted first."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "No response. Check the IP address, port and bridge settings - and whether another program is still connected; the bridge accepts only one connection."
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Polling intervals",
+        "description": "The bridge handles one request at a time. Few sensors polled slowly beats many polled fast.",
+        "data": {
+          "fast_interval": "Fast interval (power, state of charge)",
+          "slow_interval": "Slow interval (counters, versions)",
+          "status_interval": "Status flags",
+          "timeout": "Timeout in seconds",
+          "message_wait": "Pause between requests in seconds",
+          "error_fallback_entity": "MQTT error sensor as second source"
+        },
+        "data_description": {
+          "timeout": "Below 5 seconds this gets risky: if Home Assistant gives up too early, the answer still arrives and gets attributed to the next request.",
+          "error_fallback_entity": "Optional. When the Modbus register reads 0, this sensor is used instead - it holds an error code longer."
+        }
+      }
+    }
+  },
+  "services": {
+    "register_dump": {
+      "name": "Register dump",
+      "description": "Creates a full snapshot of the readable register space. Run it before and after a firmware update and compare - Marstek does not publish changelogs.",
+      "fields": {
+        "label": {
+          "name": "Label",
+          "description": "Part of the output file name."
+        },
+        "sweep": {
+          "name": "Coarse sweep",
+          "description": "Also probes the whole address space. Takes much longer and finds blocks, not single registers between dead neighbours."
+        }
+      }
+    },
+    "read_register": {
+      "name": "Read register",
+      "description": "Reads up to 8 holding registers over the same connection as the running poll, so the two cannot collide.",
+      "fields": {
+        "address": {
+          "name": "Address",
+          "description": "Decimal or 0x notation."
+        },
+        "count": {
+          "name": "Count",
+          "description": "1 to 8. The device rejects more."
+        },
+        "data_type": {
+          "name": "Data type",
+          "description": "How to interpret the raw words."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv1_voltage": {
+        "name": "PV1 voltage"
+      },
+      "pv2_voltage": {
+        "name": "PV2 voltage"
+      },
+      "pv3_voltage": {
+        "name": "PV3 voltage"
+      },
+      "pv4_voltage": {
+        "name": "PV4 voltage"
+      },
+      "pv1_current": {
+        "name": "PV1 current"
+      },
+      "pv2_current": {
+        "name": "PV2 current"
+      },
+      "pv3_current": {
+        "name": "PV3 current"
+      },
+      "pv4_current": {
+        "name": "PV4 current"
+      },
+      "pv1_power": {
+        "name": "PV1 power"
+      },
+      "pv2_power": {
+        "name": "PV2 power"
+      },
+      "pv3_power": {
+        "name": "PV3 power"
+      },
+      "pv4_power": {
+        "name": "PV4 power"
+      },
+      "pv_total_power": {
+        "name": "PV total power"
+      },
+      "grid_power": {
+        "name": "Grid power"
+      },
+      "battery_power": {
+        "name": "Battery power (calculated)"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "battery_soc": {
+        "name": "State of charge"
+      },
+      "daily_generation": {
+        "name": "Daily generation"
+      },
+      "monthly_generation": {
+        "name": "Monthly generation"
+      },
+      "daily_grid": {
+        "name": "Daily grid feed-in"
+      },
+      "monthly_grid": {
+        "name": "Monthly grid feed-in"
+      },
+      "cell_voltage_max": {
+        "name": "Cell voltage max"
+      },
+      "cell_voltage_min": {
+        "name": "Cell voltage min"
+      },
+      "cell_voltage_delta": {
+        "name": "Cell voltage delta"
+      },
+      "temperature": {
+        "name": "Temperature (unconfirmed)"
+      },
+      "temperature_raw": {
+        "name": "Temperature raw (unconfirmed)"
+      },
+      "error_code": {
+        "name": "Error code"
+      },
+      "error_text": {
+        "name": "Error description"
+      },
+      "device_id": {
+        "name": "Device ID"
+      },
+      "ems_version": {
+        "name": "EMS version"
+      },
+      "inv_version": {
+        "name": "Inverter version"
+      },
+      "mppt_version": {
+        "name": "MPPT version"
+      },
+      "bms_version": {
+        "name": "BMS version"
+      },
+      "screen_version": {
+        "name": "Display version"
+      },
+      "device_type": {
+        "name": "Device type (code)"
+      },
+      "device_type_text": {
+        "name": "Device type"
+      },
+      "mac_address": {
+        "name": "MAC address"
+      },
+      "comm_firmware": {
+        "name": "Communication module firmware"
+      },
+      "diag_0012": {
+        "name": "Diagnostic 0x0012"
+      },
+      "diag_0023": {
+        "name": "Diagnostic 0x0023"
+      }
+    },
+    "binary_sensor": {
+      "pv1_status": {
+        "name": "PV1 status"
+      },
+      "pv2_status": {
+        "name": "PV2 status"
+      },
+      "pv3_status": {
+        "name": "PV3 status"
+      },
+      "pv4_status": {
+        "name": "PV4 status"
+      },
+      "inverter_status": {
+        "name": "Inverter status"
+      }
+    }
+  }
+}

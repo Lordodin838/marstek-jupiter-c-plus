@@ -1,0 +1,220 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Marstek Jupiter C+",
+        "description": "IP-Adresse des RS485-WLAN-Umsetzers (Elfin EW11/EE11). Der Umsetzer muss stehen auf 115200 Bd, 8/None/1, Protokoll Modbus, Half Duplex, TCP-Server, Port 502.",
+        "data": {
+          "host": "IP-Adresse",
+          "port": "Port",
+          "unit_id": "Modbus-Adresse des Geräts",
+          "adopt_legacy": "Bisherige Entity-IDs übernehmen"
+        },
+        "data_description": {
+          "adopt_legacy": "Übernimmt die IDs einer früheren YAML-Lösung, damit Verlauf, Statistik, Dashboards und Automationen weiterlaufen. Dafür muss das alte Paket vorher entfernt und Home Assistant neu gestartet sein."
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Keine Antwort. IP-Adresse, Port und die Einstellungen des Umsetzers prüfen - und ob noch ein anderes Programm auf dem Umsetzer hängt; er verträgt nur eine Verbindung."
+    },
+    "abort": {
+      "already_configured": "Dieses Gerät ist bereits eingerichtet."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Abfragetakt",
+        "description": "Der Umsetzer bearbeitet immer nur eine Anfrage. Lieber wenige Sensoren langsam als viele schnell.",
+        "data": {
+          "fast_interval": "Schneller Takt (Leistungen, Ladezustand)",
+          "slow_interval": "Langsamer Takt (Zähler, Versionen)",
+          "status_interval": "Statusflags",
+          "timeout": "Zeitüberschreitung in Sekunden",
+          "message_wait": "Pause zwischen zwei Anfragen in Sekunden",
+          "error_fallback_entity": "MQTT-Fehlersensor als zweite Quelle"
+        },
+        "data_description": {
+          "timeout": "Unter 5 Sekunden wird es kritisch: gibt Home Assistant zu früh auf, trifft die Antwort trotzdem ein und wird der nächsten Anfrage zugeordnet.",
+          "error_fallback_entity": "Optional. Steht das Modbus-Register auf 0, wird dieser Sensor herangezogen - er hält einen Fehlercode länger."
+        }
+      }
+    }
+  },
+  "services": {
+    "register_dump": {
+      "name": "Registerabzug",
+      "description": "Legt einen vollständigen Abzug des lesbaren Registerraums an. Vor und nach einem Firmware-Update laufen lassen und vergleichen - Marstek veröffentlicht keine Changelogs.",
+      "fields": {
+        "label": {
+          "name": "Bezeichnung",
+          "description": "Namensteil der Ausgabedatei, z. B. vor-update."
+        },
+        "sweep": {
+          "name": "Grobsuche",
+          "description": "Tastet zusätzlich den gesamten Adressraum ab. Dauert deutlich länger und findet Blöcke, keine einzelnen Register zwischen toten Nachbarn."
+        }
+      }
+    },
+    "read_register": {
+      "name": "Register lesen",
+      "description": "Liest bis zu 8 Holding-Register. Läuft über dieselbe Verbindung wie die laufende Abfrage, kann sich also nicht mit ihr überschneiden.",
+      "fields": {
+        "address": {
+          "name": "Adresse",
+          "description": "Dezimal oder 0x-Notation."
+        },
+        "count": {
+          "name": "Anzahl",
+          "description": "1 bis 8. Mehr lehnt das Gerät ab."
+        },
+        "data_type": {
+          "name": "Datentyp",
+          "description": "Wie die Rohwerte gedeutet werden."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "pv1_voltage": {
+        "name": "PV1 Spannung"
+      },
+      "pv2_voltage": {
+        "name": "PV2 Spannung"
+      },
+      "pv3_voltage": {
+        "name": "PV3 Spannung"
+      },
+      "pv4_voltage": {
+        "name": "PV4 Spannung"
+      },
+      "pv1_current": {
+        "name": "PV1 Strom"
+      },
+      "pv2_current": {
+        "name": "PV2 Strom"
+      },
+      "pv3_current": {
+        "name": "PV3 Strom"
+      },
+      "pv4_current": {
+        "name": "PV4 Strom"
+      },
+      "pv1_power": {
+        "name": "PV1 Leistung"
+      },
+      "pv2_power": {
+        "name": "PV2 Leistung"
+      },
+      "pv3_power": {
+        "name": "PV3 Leistung"
+      },
+      "pv4_power": {
+        "name": "PV4 Leistung"
+      },
+      "pv_total_power": {
+        "name": "PV Gesamtleistung"
+      },
+      "grid_power": {
+        "name": "Netzleistung"
+      },
+      "battery_power": {
+        "name": "Batterieleistung (berechnet)"
+      },
+      "battery_voltage": {
+        "name": "Batteriespannung"
+      },
+      "battery_soc": {
+        "name": "Ladezustand"
+      },
+      "daily_generation": {
+        "name": "Tagesertrag"
+      },
+      "monthly_generation": {
+        "name": "Monatsertrag"
+      },
+      "daily_grid": {
+        "name": "Tageseinspeisung"
+      },
+      "monthly_grid": {
+        "name": "Monatseinspeisung"
+      },
+      "cell_voltage_max": {
+        "name": "Zellspannung max"
+      },
+      "cell_voltage_min": {
+        "name": "Zellspannung min"
+      },
+      "cell_voltage_delta": {
+        "name": "Zellspannungs-Differenz"
+      },
+      "temperature": {
+        "name": "Temperatur (unbestätigt)"
+      },
+      "temperature_raw": {
+        "name": "Temperatur roh (unbestätigt)"
+      },
+      "error_code": {
+        "name": "Fehlercode"
+      },
+      "error_text": {
+        "name": "Fehlercode Klartext"
+      },
+      "device_id": {
+        "name": "Geräte-ID"
+      },
+      "ems_version": {
+        "name": "EMS-Version"
+      },
+      "inv_version": {
+        "name": "INV-Version"
+      },
+      "mppt_version": {
+        "name": "MPPT-Version"
+      },
+      "bms_version": {
+        "name": "BMS-Version"
+      },
+      "screen_version": {
+        "name": "Display-Version"
+      },
+      "device_type": {
+        "name": "Gerätetyp (Code)"
+      },
+      "device_type_text": {
+        "name": "Gerätetyp"
+      },
+      "mac_address": {
+        "name": "MAC-Adresse"
+      },
+      "comm_firmware": {
+        "name": "Kommunikationsmodul-Firmware"
+      },
+      "diag_0012": {
+        "name": "Diagnose 0x0012"
+      },
+      "diag_0023": {
+        "name": "Diagnose 0x0023"
+      }
+    },
+    "binary_sensor": {
+      "pv1_status": {
+        "name": "PV1 Status"
+      },
+      "pv2_status": {
+        "name": "PV2 Status"
+      },
+      "pv3_status": {
+        "name": "PV3 Status"
+      },
+      "pv4_status": {
+        "name": "PV4 Status"
+      },
+      "inverter_status": {
+        "name": "Wechselrichter Status"
+      }
+    }
+  }
+}
