@@ -1,6 +1,6 @@
 # Marstek Jupiter C+ für Home Assistant
 
-Lokale Modbus-TCP-Integration für den **Marstek Jupiter C+** hinter einem
+Lokale Modbus-TCP-Integration für den **Marstek Jupiter C+** (MST HIE2.5 0800) hinter einem
 RS485-WLAN-Umsetzer (Elfin EW11 / EE11). Einrichtung über die Oberfläche,
 keine YAML-Konfiguration, keine Cloud, keine zusätzlichen Python-Pakete.
 
