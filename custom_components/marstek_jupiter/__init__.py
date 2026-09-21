@@ -223,8 +223,6 @@ def _adopt_legacy_entities(hass: HomeAssistant) -> dict[str, str]:
     """
     registry = er.async_get(hass)
     mapping = _legacy_map()
-    _remove_retired_entities(hass, entry)
-
     adopted: dict[str, str] = {}
     blocked: list[str] = []
 

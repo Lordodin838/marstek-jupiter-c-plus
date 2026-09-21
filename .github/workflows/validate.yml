@@ -36,5 +36,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install voluptuous
+      - run: pip install voluptuous pyflakes
+      # Findet undefinierte Namen und Tippfehler auch in Code, den die
+      # Tests nicht durchlaufen (etwa async_setup_entry).
+      - run: python -m pyflakes custom_components
       - run: python tests/test_integration.py
