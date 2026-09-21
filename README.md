@@ -1,3 +1,5 @@
+<img src="custom_components/marstek_jupiter/brand/icon@2x.png" alt="" width="128" align="right">
+
 # Marstek Jupiter C+ für Home Assistant
 
 Lokale Modbus-TCP-Integration für den **Marstek Jupiter C+** (MST HIE2.5 0800) hinter einem
@@ -45,25 +47,72 @@ Grund.
 
 ## Entitäten
 
-**Messwerte** — PV1–4 Spannung/Strom/Leistung, PV-Gesamtleistung,
-Netzleistung, Batteriespannung, Ladezustand, berechnete Batterieleistung,
-Temperatur.
+51 Entitäten, alle am Gerät „Marstek Jupiter C+". Die Entity-IDs leitet
+Home Assistant aus dem Gerätenamen und dem Entitätsnamen ab
+(`sensor.marstek_jupiter_c_pv1_leistung` und so weiter); umbenennen lässt
+sich jede einzelne in der Oberfläche.
 
-**Energiezähler** — Tages- und Monatsertrag, Tages- und
-Monatseinspeisung. Direkt für das Energie-Dashboard geeignet.
+### Messwerte (Takt 10 s)
 
-**Batterie** — Zellspannung max und min, Zelldrift in mV. Unter 50 mV ist
-ein gesunder Pack, über 100 mV läuft eine Zelle davon — ein früher
-Hinweis auf Alterung, lange bevor die Kapazität sichtbar nachlässt.
+| Entität | Register | Einheit |
+|---|---|---|
+| PV1–4 Spannung | `0x0001` `0x0004` `0x0007` `0x000A` | V |
+| PV1–4 Strom | `0x0002` `0x0005` `0x0008` `0x000B` | A |
+| PV1–4 Leistung | `0x0003` `0x0006` `0x0009` `0x000C` | W |
+| PV Gesamtleistung | Summe PV1–4 | W |
+| Netzleistung | `0x000D`, int16 | W |
+| Batterieleistung (berechnet) | PV-Summe − Netzleistung | W |
+| Batteriespannung | `0x000F` | V |
+| Ladezustand | `0x0010` | % |
+| Temperatur (unbestätigt) | `0x000E` | °C |
 
-**Diagnose** — Fehlercode und Fehlercode im Klartext (Tabelle aus dem
-Handbuch, Abschnitt 5.1), EMS-/INV-/MPPT-/BMS-/Display-Version,
-Gerätetyp, MAC-Adresse, Firmware des Kommunikationsmoduls, Statusflags
-PV1–4 und Wechselrichter.
+Positive Netzleistung heißt Abgabe, negative Bezug. Positive
+Batterieleistung heißt laden.
 
-Nicht dokumentierte Register (`0x0012`, `0x0023`, die übrigen
-Statusflags) sind als abgeschaltete Diagnose-Entitäten dabei — sie kommen
-im Block ohnehin mit und kosten nichts.
+### Energiezähler (Takt 60 s)
+
+| Entität | Register | Einheit |
+|---|---|---|
+| Tagesertrag | `0x0013`–`0x0014`, uint32 | kWh |
+| Monatsertrag | `0x0015`–`0x0016`, uint32 | kWh |
+| Tageseinspeisung | `0x0017`–`0x0018`, uint32 | kWh |
+| Monatseinspeisung | `0x0019`–`0x001A`, uint32 | kWh |
+
+Alle vier mit `state_class: total_increasing` — direkt für das
+Energie-Dashboard geeignet.
+
+### Batterie (Takt 60 s)
+
+| Entität | Register | Einheit |
+|---|---|---|
+| Zellspannung max | `0x0020` | V |
+| Zellspannung min | `0x0021` | V |
+| Zellspannungs-Differenz | max − min | mV |
+
+Zur Zelldrift: unter 50 mV ist ein gesunder Pack, über 100 mV läuft eine
+Zelle davon — ein früher Hinweis auf Alterung, lange bevor die Kapazität
+sichtbar nachlässt.
+
+### Diagnose
+
+| Entität | Register | Takt |
+|---|---|---|
+| Fehlercode | `0x0011` | 60 s |
+| Fehlercode Klartext | aus `0x0011`, Tabelle Handbuch 5.1 | 60 s |
+| EMS-/INV-/MPPT-/BMS-/Display-Version | `0x001C`–`0x001F`, `0x0022` | 60 s |
+| Geräte-ID | `0x001B` | 60 s |
+| Gerätetyp | `0x0025`, als Klartext | 60 s |
+| PV1–4 Status, Wechselrichter Status | `0x1004`–`0x1008` | 300 s |
+| MAC-Adresse | `0x1100`–`0x1105`, ASCII | 1 h |
+| Kommunikationsmodul-Firmware | `0x1200`–`0x1205`, ASCII | 1 h |
+
+Standardmäßig **abgeschaltet**, weil ihre Bedeutung nicht geklärt ist:
+Gerätetyp (Code), Temperatur roh, Diagnose `0x0012`, Diagnose `0x0023`
+und die Statusflags `0x1000`–`0x1003`, `0x1009`, `0x100A`. Sie kommen im
+Block ohnehin mit und kosten keine zusätzliche Anfrage — wer
+weitersuchen will, schaltet sie in der Oberfläche ein.
+
+`0x0024` wird mitgelesen, aber nicht ausgewertet: vier Tage konstant 0.
 
 ### Was das Gerät nicht liefert
 
@@ -96,7 +145,8 @@ zerlegen.
 ### Über HACS
 
 1. HACS → Dreipunktmenü → *Benutzerdefinierte Repositories*
-2. Diese Repository-URL eintragen, Kategorie *Integration*
+2. `https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs` eintragen,
+   Kategorie *Integration*
 3. *Marstek Jupiter C+* herunterladen
 4. Home Assistant neu starten
 5. *Einstellungen → Geräte & Dienste → Integration hinzufügen* →
@@ -106,6 +156,19 @@ zerlegen.
 
 Den Ordner `custom_components/marstek_jupiter` nach
 `config/custom_components/` kopieren und neu starten.
+
+> **Der Ordner muss exakt `marstek_jupiter` heißen.** Home Assistant
+> sucht die Entitätsnamen unter
+> `component.marstek_jupiter.entity.sensor.…`, und dieses
+> `marstek_jupiter` kommt aus dem **Ordnernamen**, nicht aus der
+> `manifest.json`. Heißt der Ordner anders — etwa
+> `Marstek Jupiter C+`, wie es beim Entpacken eines Archivs leicht
+> passiert —, findet Home Assistant keine Übersetzung. Die Integration
+> läuft dann zwar und liefert korrekte Werte, aber **jede Entität fällt
+> auf den Gerätenamen zurück**: alle heißen „Marstek Jupiter C+" und
+> bekommen IDs wie `sensor.marstek_jupiter_c_15`. Seit Version 1.0.0
+> schreibt die Integration in diesem Fall eine Warnung ins Protokoll.
+> Über HACS installiert kann das nicht passieren.
 
 ### Einstellungen des Umsetzers
 
@@ -220,6 +283,37 @@ Optional lässt sich ein MQTT-Fehlersensor als zweite Quelle hinterlegen.
 Vorrang hat dann das Modbus-Register (lokal, live); steht es auf 0, wird
 der MQTT-Wert genommen — er hält einen Code länger, ein sehr kurzer
 Fehler kann im Register zwischen zwei Abfragen durchrutschen.
+
+## Fehlersuche
+
+**Alle Entitäten heißen „Marstek Jupiter C+" und haben IDs wie
+`sensor.marstek_jupiter_c_15`.** Der Ordnername stimmt nicht — siehe
+*Installation → Von Hand*. Ordner nach `marstek_jupiter` umbenennen und
+neu starten. Die Entity-IDs bleiben dabei, wie sie sind; wer sie sauber
+haben will, benennt sie danach in der Oberfläche um oder entfernt die
+Integration und fügt sie neu hinzu.
+
+**Im Protokoll steht „N bisherige Entitäten sind noch aktiv".** Das alte
+YAML-Paket ist noch geladen. Dann fragen **zwei Poller denselben
+Umsetzer ab** — genau der Zustand, gegen den die Blocklesung gebaut ist.
+Symptome: mehr Fehlversuche im Protokoll, gelegentlich verworfene Werte.
+Paket auf `.aus` umbenennen und neu starten.
+
+**Entitäten bleiben „nicht verfügbar".** Ein Leseblock ist dreimal
+hintereinander gescheitert. Ursachen in dieser Reihenfolge prüfen: hängt
+noch ein zweites Programm am Umsetzer (er verträgt nur eine
+Verbindung)? Steht die Zeitüberschreitung unter 5 Sekunden? Stimmen die
+Einstellungen des Elfin? Welcher Block betroffen ist, steht in der
+Warnung und in den Diagnosedaten der Integration.
+
+**`Modbus-Exception 3` beim Lesen.** Ein Block fragt mehr als 8 Register
+ab. Das Gerät lehnt solche Anfragen ab. Sollte mit der mitgelieferten
+Registerkarte nicht vorkommen.
+
+**`Modbus-Exception 2` beim Lesen.** Ein Block reicht über das Ende
+eines gültigen Bereichs hinaus. Nach einem Firmware-Update kann sich die
+Registerkarte verschoben haben — `register_dump` vorher/nachher
+vergleichen.
 
 ## Getestet
 
