@@ -1,0 +1,25 @@
+name: Logo rendern
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  rendern:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Brand-Dateien aus tools/make_logo.py erzeugen und committen
+        run: |
+          set -e
+          sudo apt-get install -y libcairo2 >/dev/null 2>&1 || true
+          pip install cairosvg
+          python tools/make_logo.py custom_components/marstek_jupiter/brand
+          ls -la custom_components/marstek_jupiter/brand
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add custom_components/marstek_jupiter/brand
+          git commit -m "Logo: Brand-Dateien aus tools/make_logo.py erzeugt"
+          git push
