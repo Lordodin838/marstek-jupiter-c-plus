@@ -6,6 +6,7 @@ class DataUpdateCoordinator:
         self.config_entry = config_entry
         self.name = name
         self.update_interval = update_interval
+        self.always_update = always_update
         self.data = None
         self.last_update_success = True
     def __class_getitem__(cls, item):

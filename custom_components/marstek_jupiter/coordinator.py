@@ -105,9 +105,15 @@ class JupiterCoordinator(DataUpdateCoordinator[JupiterData]):
             config_entry=config_entry,
             name=entry_title,
             update_interval=timedelta(seconds=fast_interval),
-            # Der Bus vertraegt keine Ueberholspur: laeuft ein Durchlauf
-            # noch, wird der naechste ausgelassen statt daneben gestartet.
-            always_update=False,
+            # always_update MUSS True bleiben (Standard). Der Coordinator
+            # gibt bei jeder Runde dasselbe, veraenderte JupiterData-Objekt
+            # zurueck. Mit always_update=False vergleicht Home Assistant
+            # alte und neue Daten - das ist dasselbe Objekt, also "gleich",
+            # und die Entitaeten werden nie benachrichtigt: sie zeigen nur
+            # den Wert vom Start und stehen danach still. So geschehen in
+            # 1.0.0. Parallele Durchlaeufe verhindert Home Assistant
+            # ohnehin selbst.
+            always_update=True,
         )
 
     async def _async_update_data(self) -> JupiterData:

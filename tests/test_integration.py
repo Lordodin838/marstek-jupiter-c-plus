@@ -280,12 +280,26 @@ def test_request_budget() -> None:
           f"(bisherige YAML-Loesung: rund 48)")
 
 
+def test_coordinator_notifies() -> None:
+    """Regression 1.0.0: mit always_update=False blieben alle Entitaeten
+    nach dem ersten Wert stehen, weil jede Runde dasselbe Objekt liefert."""
+    from custom_components.marstek_jupiter.coordinator import JupiterCoordinator
+
+    coordinator = JupiterCoordinator(
+        None, None, config_entry=None, fast_interval=10, slow_interval=60,
+        status_interval=300, static_interval=3600, entry_title="Test",
+    )
+    check("Coordinator benachrichtigt nach jeder Runde (always_update)",
+          coordinator.always_update is True, "always_update ist nicht True")
+
+
 async def main() -> int:
     test_register_map()
     test_decoding()
     test_sensor_values()
     test_sanity_filter()
     test_request_budget()
+    test_coordinator_notifies()
     await test_transport()
     await test_stray_response()
     await test_late_response()
