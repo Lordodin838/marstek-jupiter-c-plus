@@ -1,260 +1,217 @@
-<img src="custom_components/marstek_jupiter/brand/icon@2x.png" alt="" width="128" align="right">
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Lordodin838/marstek-jupiter-c-plus-hacs/main/custom_components/marstek_jupiter/brand/icon@2x.png" alt="Logo" width="112">
+</p>
 
-# Marstek Jupiter C+ für Home Assistant
+<h1 align="center">Marstek Jupiter C+</h1>
 
-Lokale Modbus-TCP-Integration für den **Marstek Jupiter C+** (MST HIE2.5 0800) hinter einem
-RS485-WLAN-Umsetzer (Elfin EW11 / EE11). Einrichtung über die Oberfläche,
-keine YAML-Konfiguration, keine Cloud, keine zusätzlichen Python-Pakete.
+<p align="center">
+  Lokale Home-Assistant-Integration für den Marstek Jupiter C+<br>
+  über Modbus TCP (Elfin EW11 / EE11)
+</p>
 
-Die Registerkarte ist an einem realen Gerät erarbeitet worden
-(Firmware 142.37.213.110, Gerätetyp 0 = Jupiter C 800 W). Wo sie von der
-verbreiteten Community-Karte abweicht, steht der Grund im Quelltext.
+<p align="center">
+  <a href="https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs/releases"><img src="https://img.shields.io/github/v/release/Lordodin838/marstek-jupiter-c-plus-hacs?label=Version" alt="Version"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-41BDF5" alt="HACS"></a>
+  <a href="https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs/actions/workflows/validate.yml"><img src="https://img.shields.io/github/actions/workflow/status/Lordodin838/marstek-jupiter-c-plus-hacs/validate.yml?label=Tests" alt="Tests"></a>
+</p>
 
 ---
 
-## Warum nicht einfach die Modbus-Integration von Home Assistant
+## Auf einen Blick
 
-Der Elfin-Umsetzer hat zwei Eigenheiten, an denen eine gewöhnliche
-Modbus-Konfiguration scheitert:
+- ✅ **Einrichtung über die Oberfläche** – keine YAML, keine Cloud, keine
+  Zusatzpakete
+- ⚡ **Leistung, Ladezustand und Netz alle 10 s** – aus *einer* Anfrage,
+  also aus demselben Augenblick
+- 🔋 **Energiezähler fürs Energie-Dashboard** – PV, Batterie geladen und
+  entladen, ohne Riemann-Helfer
+- 🛡️ **Robust gegen die Eigenheiten des Elfin** – verirrte und
+  verspätete Antworten werden erkannt und verworfen
+- 🧾 **Fehlercode im Klartext** – nach der Tabelle aus dem Handbuch
+- 🔁 **Umstieg von YAML ohne Datenverlust** – bisherige Entity-IDs samt
+  Verlauf werden übernommen
 
-1. **Er bearbeitet immer nur eine Anfrage.** Kommen zwei kurz
-   hintereinander, ordnet er Antworten der falschen Anfrage zu. Sichtbar
-   wird das als *richtiger Wert im falschen Sensor* — ein Ladezustand von
-   3308 %, weil die Antwort der Zellspannungs-Abfrage im SoC-Sensor
-   landete.
-2. **Er reicht fremde Antworten mit passender Transaction-ID durch.**
+Getestet mit Firmware 142.37.213.110, Gerätetyp Jupiter C 800 W.
 
-Diese Integration bringt deshalb einen eigenen kleinen Modbus-Transport
-mit: eine Verbindung, ein Lock, strenge Prüfung von Transaction-ID,
-Protokoll-ID, Unit-ID und Antwortlänge. Was nicht exakt zur eigenen
-Anfrage passt, wird verworfen statt übernommen.
-
-Dazu kommt die Blocklesung. Statt 16 Einzelanfragen für
-`0x0001`–`0x0010` liest die Integration zwei Blöcke zu je 8 Registern:
-
-| | bisher (YAML, Einzelregister) | diese Integration |
-|---|---|---|
-| Anfragen pro Minute | rund 48 | **15,4** |
-| PV-Leistungen, Netzleistung, SoC | 10 s, aber aus verschiedenen Anfragen | 10 s, **aus derselben Anfrage** |
-| PV-Spannungen und -Ströme | 121 s | 10 s (kommen gratis mit) |
-| Zellspannung max/min | 61 s und 67 s, 6 s versetzt | gemeinsam, kein Versatz |
-
-Dass die regelungsrelevanten Werte aus **einer** Anfrage stammen, ist
-kein Schönheitsfehler-Fix: die berechnete Batterieleistung ist die
-Differenz aus PV-Summe und Netzleistung. Stammen die Summanden aus
-verschiedenen Augenblicken, schwankt das Ergebnis ohne physikalischen
-Grund.
-
-## Entitäten
-
-46 Entitäten, alle am Gerät „Marstek Jupiter C+". Die Entity-IDs leitet
-Home Assistant aus dem Gerätenamen und dem Entitätsnamen ab
-(`sensor.marstek_jupiter_c_pv1_leistung` und so weiter); umbenennen lässt
-sich jede einzelne in der Oberfläche.
-
-### Messwerte (Takt 10 s)
-
-| Entität | Register | Einheit |
-|---|---|---|
-| PV1–4 Spannung | `0x0001` `0x0004` `0x0007` `0x000A` | V |
-| PV1–4 Strom | `0x0002` `0x0005` `0x0008` `0x000B` | A |
-| PV1–4 Leistung | `0x0003` `0x0006` `0x0009` `0x000C` | W |
-| PV Gesamtleistung | Summe PV1–4 | W |
-| Netzleistung | `0x000D`, int16 | W |
-| Batterieleistung (berechnet) | PV-Summe − Netzleistung | W |
-| Batteriespannung | `0x000F` | V |
-| Ladezustand | `0x0010` | % |
-| Temperatur (unbestätigt) | `0x000E` | °C |
-
-Positive Netzleistung heißt Abgabe, negative Bezug. Positive
-Batterieleistung heißt laden.
-
-### Energiezähler (Takt 60 s)
-
-| Entität | Register | Einheit |
-|---|---|---|
-| Tagesertrag | `0x0013`–`0x0014`, uint32 | kWh |
-| Monatsertrag | `0x0015`–`0x0016`, uint32 | kWh |
-| Tageseinspeisung | `0x0017`–`0x0018`, uint32 | kWh |
-| Monatseinspeisung | `0x0019`–`0x001A`, uint32 | kWh |
-
-Alle vier mit `state_class: total_increasing` — direkt für das
-Energie-Dashboard geeignet.
-
-### Aufsummierte Energie (seit 1.1.0)
-
-Die Gerätezähler oben messen auf der AC-Seite und kennen weder die
-PV-Eingangsenergie noch Laden und Entladen der Batterie. Diese drei
-Zähler summiert die Integration selbst aus den 10-s-Leistungswerten:
-
-| Entität | Quelle | Einheit |
-|---|---|---|
-| PV Energie | PV Gesamtleistung | kWh |
-| Batterie geladen | positiver Anteil der Batterieleistung (berechnet) | kWh |
-| Batterie entladen | negativer Anteil der Batterieleistung (berechnet) | kWh |
-
-Damit braucht das Energie-Dashboard keine Riemann-Helfer mehr:
-**Solar** → *PV Energie*, **Batterie** → *Batterie geladen* /
-*Batterie entladen*.
-
-* Gezählt wird nur, wenn PV- und Netzleistung in derselben Runde frisch
-  gelesen wurden. Fällt die Verbindung länger als 60 s aus, wird die
-  Lücke nicht hochgerechnet — lieber etwas zu wenig als erfunden.
-* Der Stand überlebt Neustarts (Home Assistant speichert den letzten
-  Wert).
-* „Geladen“ enthält die Wandlungsverluste (rund 6 %), weil die
-  Batterieleistung aus der Bilanz PV − Netzleistung stammt.
-
-### Batterie (Takt 60 s)
-
-| Entität | Register | Einheit |
-|---|---|---|
-| Zellspannung max | `0x0020` | V |
-| Zellspannung min | `0x0021` | V |
-| Zellspannungs-Differenz | max − min | mV |
-
-Zur Zelldrift: unter 50 mV ist ein gesunder Pack, über 100 mV läuft eine
-Zelle davon — ein früher Hinweis auf Alterung, lange bevor die Kapazität
-sichtbar nachlässt.
-
-### Diagnose
-
-| Entität | Register | Takt |
-|---|---|---|
-| Fehlercode | `0x0011` | 60 s |
-| Fehlercode Klartext | aus `0x0011`, Tabelle Handbuch 5.1 | 60 s |
-| EMS-/INV-/MPPT-/BMS-/Display-Version | `0x001C`–`0x001F`, `0x0022` | 60 s |
-| Geräte-ID | `0x001B` | 60 s |
-| Gerätetyp | `0x0025`, als Klartext | 60 s |
-| PV1–4 Status, Wechselrichter Status | `0x1004`–`0x1008` | 300 s |
-| MAC-Adresse | `0x1100`–`0x1105`, ASCII | 1 h |
-| Kommunikationsmodul-Firmware | `0x1200`–`0x1205`, ASCII | 1 h |
-
-Standardmäßig **abgeschaltet**: Gerätetyp (Code) und Temperatur roh.
-
-Die ungeklärten Register `0x0012`, `0x0023`, `0x0024` und die
-Statusflags `0x1000`–`0x1003`, `0x1009`, `0x100A` werden mitgelesen, haben
-aber seit 1.1.0 keine eigenen Entitäten mehr. Wer sie untersuchen will,
-nimmt die Dienste `read_register` oder `register_dump`. Die bis 1.0.0
-angelegten Einträge entfernt die Integration beim Start selbst.
-
-### Was das Gerät nicht liefert
-
-Damit niemand weiter danach sucht:
-
-* **Kein Register für die DC-Batterieleistung.** `0x000E` wurde dafür
-  getestet und ist es nicht — der Wert stand konstant auf 300, während PV
-  zwischen 472 und 493 W lief. Die Integration berechnet die
-  Batterieleistung aus der Bilanz.
-* **Kein Register für die Entladetiefe oder SoC-Grenze.** Die läuft
-  ausschließlich über hm2mqtt.
-* **Keine Einzelspannungen der 16 Zellen**, nur Maximum und Minimum.
-* `0x4000`–`0x43FF` ist write-only und liefert lesend nichts. Diese
-  Integration schreibt nicht ins Gerät.
-
-## Plausibilitätsfilter
-
-Zweites Netz unter der Transaction-ID-Prüfung: Rohwerte außerhalb
-physikalisch möglicher Grenzen werden verworfen, der letzte gute Wert
-bleibt stehen. Ein Ladezustand von 3308 kommt gar nicht erst in den
-Verlauf. Die Grenzen stehen in `const.py` unter `VALID_RANGES`.
-
-Die Netzleistung wird als **int16** gelesen. Die verbreitete
-Community-Registerkarte führt `0x000D` als unsigned — als uint16 erschiene
-ein Netzbezug als rund 65 000 W und würde jede Hausverbrauchs-Rechnung
-zerlegen.
+---
 
 ## Installation
 
-### Über HACS
+**Über HACS**
 
-1. HACS → Dreipunktmenü → *Benutzerdefinierte Repositories*
-2. `https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs` eintragen,
-   Kategorie *Integration*
-3. *Marstek Jupiter C+* herunterladen
-4. Home Assistant neu starten
-5. *Einstellungen → Geräte & Dienste → Integration hinzufügen* →
-   *Marstek Jupiter C+*
+1. HACS → ⋮ → *Benutzerdefinierte Repositories*
+2. `https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs`
+   eintragen, Kategorie *Integration*
+3. *Marstek Jupiter C+* herunterladen und Home Assistant neu starten
+4. *Einstellungen → Geräte & Dienste → Integration hinzufügen →
+   Marstek Jupiter C+*
+5. IP-Adresse des Umsetzers eingeben – fertig
 
-### Von Hand
+Neue Versionen meldet Home Assistant danach von selbst unter
+*Einstellungen → Updates*.
+
+**Einstellungen des Elfin**
+
+| Einstellung | Wert |
+|---|---|
+| Serielle Schnittstelle | 115200 Bd, 8 / None / 1 |
+| Protokoll | Modbus |
+| Flow Control | Half Duplex |
+| CLI | Disabled |
+| Netzwerk | TCP Server, Port 502, Route UART |
+
+> ⚠️ Der Umsetzer verträgt **nur eine Verbindung**. Kein zweites
+> Programm und kein zweites Modbus-Paket parallel betreiben.
+
+<details>
+<summary><b>Installation von Hand</b></summary>
 
 Den Ordner `custom_components/marstek_jupiter` nach
 `config/custom_components/` kopieren und neu starten.
 
-> **Der Ordner muss exakt `marstek_jupiter` heißen.** Home Assistant
-> sucht die Entitätsnamen unter
-> `component.marstek_jupiter.entity.sensor.…`, und dieses
-> `marstek_jupiter` kommt aus dem **Ordnernamen**, nicht aus der
-> `manifest.json`. Heißt der Ordner anders — etwa
-> `Marstek Jupiter C+`, wie es beim Entpacken eines Archivs leicht
-> passiert —, findet Home Assistant keine Übersetzung. Die Integration
-> läuft dann zwar und liefert korrekte Werte, aber **jede Entität fällt
-> auf den Gerätenamen zurück**: alle heißen „Marstek Jupiter C+" und
-> bekommen IDs wie `sensor.marstek_jupiter_c_15`. Seit Version 1.0.0
-> schreibt die Integration in diesem Fall eine Warnung ins Protokoll.
-> Über HACS installiert kann das nicht passieren.
+**Der Ordner muss exakt `marstek_jupiter` heißen.** Home Assistant
+findet die Entitätsnamen über den Ordnernamen, nicht über die
+`manifest.json`. Heißt er anders – etwa `Marstek Jupiter C+` nach dem
+Entpacken –, laufen zwar alle Werte, aber jede Entität heißt wie das
+Gerät und bekommt eine ID wie `sensor.marstek_jupiter_c_15`. Die
+Integration schreibt in diesem Fall eine Warnung ins Protokoll. Über
+HACS installiert kann das nicht passieren.
 
-### Einstellungen des Umsetzers
+</details>
 
-Der Elfin muss stehen auf: 115200 Bd, 8/None/1, Protokoll **Modbus**,
-Flow Control **Half Duplex**, CLI **Disabled**, **TCP Server**, Port 502,
-Route UART. Und: es darf **kein zweites Programm** auf dem Umsetzer
-hängen — er verträgt nur eine Verbindung.
+---
 
-## Umstieg von einer bestehenden YAML-Lösung
+## Entitäten
 
-Die Integration kann die Entity-IDs einer früheren Modbus- und
-Template-Konfiguration übernehmen. Verlauf, Langzeitstatistik,
-Dashboards, Helfer und Automationen laufen dann ohne Nacharbeit weiter —
-Verlauf und Statistik hängen an der Entity-ID, nicht an der unique_id.
+46 Entitäten am Gerät „Marstek Jupiter C+". Jede lässt sich in der
+Oberfläche umbenennen.
 
-**Die Reihenfolge ist entscheidend:**
+**Leistung und Batterie** · alle 10 s
 
-1. Altes Paket deaktivieren — Datei umbenennen, zum Beispiel
-   `jupiter_c_plus_modbus.yaml` → `jupiter_c_plus_modbus.yaml.aus`.
-   Die zugehörigen Template-Sensoren (PV-Gesamtleistung, berechnete
-   Batterieleistung, Zellspannungs-Differenz, Fehlercode Klartext,
-   gefilterte Temperatur, Gerätetyp Klartext) mit entfernen.
-2. **Home Assistant neu starten.** Erst jetzt sind die alten Entity-IDs
-   frei.
-3. Integration hinzufügen, Haken bei *Bisherige Entity-IDs übernehmen*
-   stehen lassen.
-
-Wird das alte Paket nicht vorher entfernt, schreibt die Integration eine
-Warnung ins Protokoll und übernimmt nichts — die neuen Entitäten bekommen
-dann IDs mit Anhängsel `_2`. Das lässt sich nur durch den sauberen Weg
-beheben: Integration entfernen, Paket entfernen, neu starten, Integration
-neu hinzufügen.
-
-Übernommen werden diese unique_ids:
-
-| bisher (Plattform) | wird zu |
+| Entität | Einheit |
 |---|---|
-| `jupiter_modbus_pv1..4_voltage/current/power` (modbus) | PV1–4 Spannung/Strom/Leistung |
-| `jupiter_modbus_grid_power`, `_battery_voltage`, `_battery_soc` (modbus) | Netzleistung, Batteriespannung, Ladezustand |
-| `jupiter_modbus_daily/monthly_generation/grid` (modbus) | Energiezähler |
-| `jupiter_modbus_cell_voltage_max/min` (modbus) | Zellspannungen |
-| `jupiter_modbus_*_version`, `_device_id`, `_device_type`, `_mac`, `_comm_version` (modbus) | Diagnose |
-| `jupiter_diag_0011` (modbus) | Fehlercode |
-| `jupiter_modbus_pv1..4_status`, `jupiter_modbus_inv_status` (modbus) | Statusflags |
-| `jupiter_modbus_total_pv_power` (template) | PV-Gesamtleistung |
-| `jupiter_battery_power_calculated` (template) | Batterieleistung berechnet |
-| `jupiter_cell_voltage_delta` (template) | Zellspannungs-Differenz |
-| `jupiter_error_code_text` (template) | Fehlercode Klartext |
-| `jupiter_temperature_filtered` (template) | Temperatur |
-| `jupiter_modbus_device_type_text` (template) | Gerätetyp |
+| PV1–4 Leistung | W |
+| PV1–4 Spannung | V |
+| PV1–4 Strom | A |
+| PV Gesamtleistung | W |
+| Netzleistung ¹ | W |
+| Batterieleistung (berechnet) ² | W |
+| Ladezustand | % |
+| Batteriespannung | V |
+| Temperatur (unbestätigt) | °C |
 
-Die angezeigten Namen ändern sich (aus *Jupiter Modbus PV1 Leistung* wird
-*Marstek Jupiter C+ PV1 Leistung*), die IDs nicht.
+¹ positiv = Abgabe, negativ = Bezug<br>
+² PV − Netzleistung; positiv = laden, negativ = entladen
+
+**Energie** · für das Energie-Dashboard
+
+| Entität | Quelle | Einheit |
+|---|---|---|
+| PV Energie | aufsummiert | kWh |
+| Batterie geladen | aufsummiert | kWh |
+| Batterie entladen | aufsummiert | kWh |
+| Tages- / Monatsertrag | Gerätezähler | kWh |
+| Tages- / Monatseinspeisung | Gerätezähler | kWh |
+
+**Zellen** · alle 60 s
+
+| Entität | Einheit |
+|---|---|
+| Zellspannung max / min | V |
+| Zellspannungs-Differenz | mV |
+
+Unter 50 mV Differenz ist ein gesunder Pack, über 100 mV läuft eine
+Zelle davon.
+
+**Status und Diagnose**
+
+| Entität | Takt |
+|---|---|
+| Fehlercode, Fehlercode Klartext | 60 s |
+| PV1–4 Status, Wechselrichter Status | 300 s |
+| EMS-, INV-, MPPT-, BMS-, Display-Version | 60 s |
+| Geräte-ID, Gerätetyp | 60 s |
+| MAC-Adresse, Kommunikationsmodul-Firmware | 1 h |
+
+Standardmäßig abgeschaltet: *Gerätetyp (Code)* und *Temperatur roh*.
+
+<details>
+<summary><b>Registerkarte</b></summary>
+
+| Register | Inhalt |
+|---|---|
+| `0x0001`–`0x000C` | PV1–4 je Spannung, Strom, Leistung |
+| `0x000D` | Netzleistung, **int16** |
+| `0x000E` | Temperatur (unbestätigt) |
+| `0x000F` | Batteriespannung |
+| `0x0010` | Ladezustand |
+| `0x0011` | Fehlercode (dezimal, Handbuch hexadezimal) |
+| `0x0013`–`0x001A` | Tages-/Monatsertrag, Tages-/Monatseinspeisung, uint32 |
+| `0x001B` | Geräte-ID |
+| `0x001C`–`0x001F`, `0x0022` | EMS, INV, MPPT, BMS, Display |
+| `0x0020` / `0x0021` | Zellspannung max / min |
+| `0x0025` | Gerätetyp |
+| `0x1004`–`0x1008` | PV1–4 Status, Wechselrichter Status |
+| `0x1100`–`0x1105` | MAC-Adresse, ASCII |
+| `0x1200`–`0x1205` | Firmware Kommunikationsmodul, ASCII |
+
+Mitgelesen, aber ohne eigene Entität: `0x0012`, `0x0023`, `0x0024` und
+die Statusflags `0x1000`–`0x1003`, `0x1009`, `0x100A`. Wer sie
+untersuchen will, nimmt die Dienste unten.
+
+**Was das Gerät nicht liefert:** kein Register für die
+DC-Batterieleistung (`0x000E` ist es nicht), keines für die Entladetiefe
+(läuft nur über hm2mqtt), keine Einzelspannungen der 16 Zellen.
+`0x4000`–`0x43FF` ist write-only. Diese Integration schreibt nicht ins
+Gerät.
+
+</details>
+
+---
+
+## Energie-Dashboard
+
+| Bereich | Entität |
+|---|---|
+| Solar | PV Energie |
+| Batterie – in die Batterie | Batterie geladen |
+| Batterie – aus der Batterie | Batterie entladen |
+| Batterie – Ladezustand | Ladezustand |
+
+Die drei Zähler summiert die Integration selbst aus den 10-s-Werten. Sie
+zählt nur Runden, in denen die Leistungen frisch gelesen wurden; fällt
+die Verbindung länger als 60 s aus, wird die Lücke nicht hochgerechnet.
+Der Stand überlebt Neustarts. „Geladen“ enthält die Wandlungsverluste
+(rund 6 %).
+
+---
+
+## Einstellungen
+
+*Einstellungen → Geräte & Dienste → Marstek Jupiter C+ → Konfigurieren*
+
+| Einstellung | Standard |
+|---|---|
+| Schneller Takt (Leistungen, Ladezustand) | 10 s |
+| Langsamer Takt (Zähler, Versionen) | 60 s |
+| Statusflags | 300 s |
+| Zeitüberschreitung | 5 s |
+| Pause zwischen zwei Anfragen | 0,15 s |
+| MQTT-Fehlersensor als zweite Quelle | – |
+
+> Faustregel: **lieber wenige Anfragen langsam als viele schnell.** Die
+> Zeitüberschreitung nicht unter 5 s setzen – sonst trifft eine späte
+> Antwort ein und wird der nächsten Anfrage zugeordnet.
+
+---
 
 ## Dienste
 
-### `marstek_jupiter.register_dump`
+<details>
+<summary><b><code>marstek_jupiter.register_dump</code> – Registerabzug</b></summary>
 
-Legt einen vollständigen Abzug des lesbaren Registerraums an — vor und
-nach einem Firmware-Update laufen lassen und vergleichen. Marstek
-veröffentlicht keine Changelogs, und in der Venus-Reihe haben sich
-Registeradressen zwischen Generationen nachweislich geändert.
+Vollständiger Abzug des lesbaren Registerraums, zum Beispiel vor und
+nach einem Firmware-Update. Marstek veröffentlicht keine Changelogs.
 
 ```yaml
 action: marstek_jupiter.register_dump
@@ -264,25 +221,17 @@ data:
 ```
 
 Ergebnis als `.json` und `.txt` in `config/marstek_jupiter/`. Der Abzug
-läuft über **dieselbe Verbindung** wie die laufende Abfrage — anders als
-ein externes Skript kann er sich mit ihr nicht überschneiden. Genau
-daran sind frühere Scan-Versuche gescheitert: der Umsetzer reichte
-fremde Antworten durch, und 49 Adressen „antworteten", die es gar nicht
-gibt.
+läuft über dieselbe Verbindung wie die laufende Abfrage und kann sich
+mit ihr nicht überschneiden. Jeder Wert wird dreimal gelesen; unsichere
+Werte stehen mit `NEIN` in der Textdatei.
 
-Jeder Wert wird dreimal gelesen; übernommen wird nur, was in der Mehrheit
-der Durchläufe gleich war. Alles andere steht mit `NEIN` in der
-Textdatei.
+`sweep: true` tastet zusätzlich den ganzen Adressraum ab. Das findet
+Blöcke, aber keine Einzelgänger zwischen toten Nachbarn.
 
-`sweep: true` tastet zusätzlich den gesamten Adressraum ab (zwei
-Stichproben je 256er-Seite). **Ehrliche Grenze:** das findet Blöcke,
-keine Einzelgänger. Ein gültiges Register zwischen toten Nachbarn — wie
-`0x002A` — lässt jede 8er-Stichprobe scheitern. Wer so etwas sucht, muss
-den Bereich in `SCAN_RANGES` aufnehmen, dort wird halbiert.
+</details>
 
-### `marstek_jupiter.read_register`
-
-Einzelabfrage mit Antwort, für die Registersuche von Hand:
+<details>
+<summary><b><code>marstek_jupiter.read_register</code> – Einzelabfrage</b></summary>
 
 ```yaml
 action: marstek_jupiter.read_register
@@ -293,90 +242,169 @@ data:
 response_variable: ergebnis
 ```
 
-## Abfragetakt ändern
+</details>
 
-*Einstellungen → Geräte & Dienste → Marstek Jupiter C+ → Konfigurieren.*
+---
 
-Die Faustregel für diese Anlage: **lieber wenige Sensoren langsam als
-viele schnell.** Und die Zeitüberschreitung nicht unter 5 Sekunden
-setzen — gibt Home Assistant zu früh auf, trifft die Antwort trotzdem ein
-und wird der nächsten Anfrage zugeordnet. Genau das war die Ursache der
-vertauschten Werte.
+## Umstieg von einer YAML-Lösung
 
-Optional lässt sich ein MQTT-Fehlersensor als zweite Quelle hinterlegen.
-Vorrang hat dann das Modbus-Register (lokal, live); steht es auf 0, wird
-der MQTT-Wert genommen — er hält einen Code länger, ein sehr kurzer
-Fehler kann im Register zwischen zwei Abfragen durchrutschen.
+<details>
+<summary><b>Bisherige Entity-IDs übernehmen</b></summary>
+
+Die Integration übernimmt die Entity-IDs einer früheren Modbus- und
+Template-Konfiguration. Verlauf, Statistik, Dashboards und Automationen
+laufen dann ohne Nacharbeit weiter.
+
+**Reihenfolge:**
+
+1. Altes Paket deaktivieren, zum Beispiel `jupiter_c_plus_modbus.yaml`
+   → `jupiter_c_plus_modbus.yaml.aus`, samt der zugehörigen
+   Template-Sensoren.
+2. **Home Assistant neu starten.** Erst dann sind die IDs frei.
+3. Integration hinzufügen, Haken bei *Bisherige Entity-IDs übernehmen*
+   stehen lassen.
+
+Ist das alte Paket noch aktiv, übernimmt die Integration nichts und
+schreibt eine Warnung ins Protokoll.
+
+| bisher (unique_id) | wird zu |
+|---|---|
+| `jupiter_modbus_pv1..4_voltage/current/power` | PV1–4 Spannung/Strom/Leistung |
+| `jupiter_modbus_grid_power`, `_battery_voltage`, `_battery_soc` | Netzleistung, Batteriespannung, Ladezustand |
+| `jupiter_modbus_daily/monthly_generation/grid` | Gerätezähler |
+| `jupiter_modbus_cell_voltage_max/min` | Zellspannungen |
+| `jupiter_modbus_*_version`, `_device_id`, `_device_type`, `_mac`, `_comm_version` | Diagnose |
+| `jupiter_diag_0011` | Fehlercode |
+| `jupiter_modbus_pv1..4_status`, `_inv_status` | Status |
+| `jupiter_modbus_total_pv_power` (template) | PV Gesamtleistung |
+| `jupiter_battery_power_calculated` (template) | Batterieleistung (berechnet) |
+| `jupiter_cell_voltage_delta` (template) | Zellspannungs-Differenz |
+| `jupiter_error_code_text` (template) | Fehlercode Klartext |
+| `jupiter_temperature_filtered` (template) | Temperatur |
+| `jupiter_modbus_device_type_text` (template) | Gerätetyp |
+
+</details>
+
+---
 
 ## Fehlersuche
 
-**Alle Entitäten heißen „Marstek Jupiter C+" und haben IDs wie
-`sensor.marstek_jupiter_c_15`.** Der Ordnername stimmt nicht — siehe
-*Installation → Von Hand*. Ordner nach `marstek_jupiter` umbenennen und
-neu starten. Die Entity-IDs bleiben dabei, wie sie sind; wer sie sauber
-haben will, benennt sie danach in der Oberfläche um oder entfernt die
-Integration und fügt sie neu hinzu.
+<details>
+<summary><b>Alle Entitäten heißen „Marstek Jupiter C+"</b></summary>
 
-**Im Protokoll steht „N bisherige Entitäten sind noch aktiv".** Das alte
-YAML-Paket ist noch geladen. Dann fragen **zwei Poller denselben
-Umsetzer ab** — genau der Zustand, gegen den die Blocklesung gebaut ist.
-Symptome: mehr Fehlversuche im Protokoll, gelegentlich verworfene Werte.
-Paket auf `.aus` umbenennen und neu starten.
+Der Ordnername stimmt nicht, siehe *Installation von Hand*. Ordner nach
+`marstek_jupiter` umbenennen und neu starten.
 
-**Entitäten bleiben „nicht verfügbar".** Ein Leseblock ist dreimal
-hintereinander gescheitert. Ursachen in dieser Reihenfolge prüfen: hängt
-noch ein zweites Programm am Umsetzer (er verträgt nur eine
-Verbindung)? Steht die Zeitüberschreitung unter 5 Sekunden? Stimmen die
-Einstellungen des Elfin? Welcher Block betroffen ist, steht in der
-Warnung und in den Diagnosedaten der Integration.
+</details>
 
-**`Modbus-Exception 3` beim Lesen.** Ein Block fragt mehr als 8 Register
-ab. Das Gerät lehnt solche Anfragen ab. Sollte mit der mitgelieferten
-Registerkarte nicht vorkommen.
+<details>
+<summary><b>„N bisherige Entitäten sind noch aktiv" im Protokoll</b></summary>
 
-**`Modbus-Exception 2` beim Lesen.** Ein Block reicht über das Ende
-eines gültigen Bereichs hinaus. Nach einem Firmware-Update kann sich die
-Registerkarte verschoben haben — `register_dump` vorher/nachher
-vergleichen.
+Das alte YAML-Paket ist noch geladen, und zwei Programme fragen
+denselben Umsetzer ab. Paket auf `.aus` umbenennen und neu starten.
 
-## Getestet
+</details>
 
-`python3 tests/test_integration.py` läuft ohne Home Assistant: ein
-Simulator bildet die Eigenheiten des Geräts nach (höchstens 8 Register,
-Exception bei Bereichsüberschreitung, verirrte Antworten mit fremder
-Transaction-ID, verspätete Antworten nach dem Timeout), und die
-Sensorwerte werden gegen echte Messwerte der Anlage geprüft.
+<details>
+<summary><b>Entitäten bleiben „nicht verfügbar"</b></summary>
 
-137 Prüfungen, darunter:
+Ein Leseblock ist dreimal hintereinander gescheitert. Prüfen:
 
-* jede Adresse, die eine Entität braucht, liegt in einem Leseblock
-* kein Block überschreitet 8 Register oder die Bereichsgrenzen
-* eine verirrte Antwort verfälscht den Ladezustand nicht
-* 20 gleichzeitige Anfragen bleiben getrennt
-* `1062` wird als `0x426` gedeutet — der Fall vom 15.09.2026
+1. Hängt ein zweites Programm am Umsetzer?
+2. Steht die Zeitüberschreitung unter 5 s?
+3. Stimmen die Einstellungen des Elfin?
 
-## Bekannte Eigenheiten des Geräts
+Welcher Block betroffen ist, steht im Protokoll und in den
+Diagnosedaten der Integration.
 
-**Die Netzleistung pendelt.** Das ist echt und kein Modbus-Artefakt:
-ein Shelly am Hausanschluss zeigt auf derselben Phase im 5-Sekunden-Takt
-dasselbe Zappeln. Es ist die CT-Regelung des Jupiter, die der Hauslast
-nachfährt, überschwingt und korrigiert. Im Mittel regelt es sauber. Nicht
-wegfiltern wollen.
+</details>
 
-**Nach einem Firmware-Update** kann die Phasendiagnose auf 0 stehen. Ein
-Lauf über den entsprechenden Knopf in hm2mqtt stellt sie wieder her.
+<details>
+<summary><b>Modbus-Exception 2 oder 3</b></summary>
 
-**`0x0011` ist der Fehlercode**, nicht der Batteriestrom. Das Handbuch
-notiert die Codes hexadezimal, das Register liefert sie dezimal
-(1062 = 0x426). Belegt durch vier von vier übereinstimmenden Abfragen
-gegen die MQTT-Meldungen.
+**3:** Eine Anfrage umfasst mehr als 8 Register.
+**2:** Eine Anfrage reicht über das Ende eines gültigen Bereichs – nach
+einem Firmware-Update kann sich die Registerkarte verschoben haben.
+`register_dump` vorher und nachher vergleichen.
 
-**`0x0020` und `0x0021` sind die Zellspannungen**, nicht zwei
-Systemtemperaturen. Beleg: Wert mal 16 Zellen ergibt die Batteriespannung
-aus `0x000F` (3383 → 54,1 V bei gemessenen 54,0 V). Zwei Register, die
-auf 0,003 identisch sind und dem Ladezustand folgen, sind keine zwei
-Systemtemperaturen.
+</details>
 
-## Lizenz
+---
 
-MIT
+## Technischer Hintergrund
+
+<details>
+<summary><b>Warum nicht die Modbus-Integration von Home Assistant?</b></summary>
+
+Der Elfin hat zwei Eigenheiten, an denen eine gewöhnliche
+Modbus-Konfiguration scheitert:
+
+1. **Er bearbeitet immer nur eine Anfrage.** Kommen zwei kurz
+   hintereinander, ordnet er Antworten falsch zu – sichtbar als
+   *richtiger Wert im falschen Sensor*, etwa ein Ladezustand von 3308 %.
+2. **Er reicht fremde Antworten mit passender Transaction-ID durch.**
+
+Die Integration bringt deshalb einen eigenen Transport mit: eine
+Verbindung, ein Lock, strenge Prüfung von Transaction-ID, Protokoll-ID,
+Unit-ID und Länge. Dazu liest sie in Blöcken statt Register für
+Register:
+
+| | YAML, Einzelregister | diese Integration |
+|---|---|---|
+| Anfragen pro Minute | rund 48 | **15,4** |
+| PV, Netz, Ladezustand | verschiedene Anfragen | **eine Anfrage** |
+| PV-Spannungen und -Ströme | 121 s | 10 s |
+
+Weil die berechnete Batterieleistung die Differenz aus PV und
+Netzleistung ist, müssen beide aus demselben Augenblick stammen – sonst
+schwankt das Ergebnis ohne physikalischen Grund.
+
+</details>
+
+<details>
+<summary><b>Plausibilitätsfilter</b></summary>
+
+Rohwerte außerhalb physikalisch möglicher Grenzen werden verworfen, der
+letzte gute Wert bleibt stehen. Die Grenzen stehen in `const.py` unter
+`VALID_RANGES`.
+
+Die Netzleistung wird als **int16** gelesen. Die verbreitete
+Community-Karte führt `0x000D` als unsigned – ein Netzbezug erschiene
+dann als rund 65 000 W.
+
+</details>
+
+<details>
+<summary><b>Eigenheiten des Geräts</b></summary>
+
+- **Die Netzleistung pendelt.** Das ist echt: die CT-Regelung fährt der
+  Hauslast nach und überschwingt. Ein Shelly am Hausanschluss zeigt
+  dasselbe. Nicht wegfiltern.
+- **Nach einem Firmware-Update** kann die Phasendiagnose auf 0 stehen –
+  einmal über hm2mqtt neu starten.
+- **`0x0011` ist der Fehlercode**, nicht der Batteriestrom. Das Register
+  liefert dezimal, was das Handbuch hexadezimal notiert
+  (1062 = 0x426).
+- **`0x0020` / `0x0021` sind Zellspannungen**, keine Temperaturen: Wert
+  mal 16 Zellen ergibt die Batteriespannung.
+
+</details>
+
+<details>
+<summary><b>Tests</b></summary>
+
+`python3 tests/test_integration.py` läuft ohne Home Assistant (Python
+3.11 oder neuer). Ein Simulator bildet die Eigenheiten des Geräts nach:
+höchstens 8 Register, Exception bei Bereichsüberschreitung, verirrte
+und verspätete Antworten. Geprüft werden unter anderem:
+
+- jede benötigte Adresse liegt in einem Leseblock
+- eine verirrte Antwort verfälscht den Ladezustand nicht
+- 20 gleichzeitige Anfragen bleiben getrennt
+- die Energiezähler rechnen richtig und überbrücken keine Ausfälle
+
+</details>
+
+---
+
+MIT-Lizenz · [Fehler melden](https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs/issues)
