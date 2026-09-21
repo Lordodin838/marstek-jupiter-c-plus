@@ -348,6 +348,15 @@ def test_energy_counters() -> None:
           round(data.energy[ENERGY_PV] * 3600, 3), round(10 / 1000 * 1000, 3))
 
 
+def test_retired_entities() -> None:
+    from custom_components.marstek_jupiter import RETIRED_KEYS
+
+    keys = {d.key for d in sn.SENSORS}
+    equal("Entfallene Entitaeten sind nicht mehr angelegt",
+          sorted(keys & set(RETIRED_KEYS)), [])
+    equal("Alle acht entfallenen Schluessel sind erfasst", len(RETIRED_KEYS), 8)
+
+
 async def test_energy_restore() -> None:
     from custom_components.marstek_jupiter.coordinator import ENERGY_PV
 
@@ -380,6 +389,7 @@ async def main() -> int:
     test_sanity_filter()
     test_request_budget()
     test_energy_counters()
+    test_retired_entities()
     await test_energy_restore()
     await test_transport()
     await test_stray_response()

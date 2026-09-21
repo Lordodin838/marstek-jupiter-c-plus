@@ -104,6 +104,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> b
         entry_title=entry.title,
     )
 
+    _remove_retired_entities(hass, entry)
+
     adopted: dict[str, str] = {}
     if _option(entry, CONF_ADOPT_LEGACY, True):
         adopted = _adopt_legacy_entities(hass)
@@ -137,6 +139,30 @@ async def async_unload_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> 
 
 async def _async_reload(hass: HomeAssistant, entry: JupiterConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
+
+
+# Entitaeten, die es bis 1.0.0 gab und die entfallen sind. Ihre
+# Registrierungen werden beim Start entfernt, sonst stuenden sie in der
+# Geraeteansicht als "wird nicht mehr bereitgestellt" herum.
+RETIRED_KEYS: tuple[str, ...] = (
+    "diag_0012",
+    "diag_0023",
+    *(f"status_{addr:04x}" for addr in (0x1000, 0x1001, 0x1002, 0x1003, 0x1009, 0x100A)),
+)
+
+
+def _remove_retired_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    registry = er.async_get(hass)
+    removed = 0
+    for key in RETIRED_KEYS:
+        entity_id = registry.async_get_entity_id(
+            "sensor", DOMAIN, f"{entry.entry_id}_{key}"
+        )
+        if entity_id is not None:
+            registry.async_remove(entity_id)
+            removed += 1
+    if removed:
+        _LOGGER.info("%d entfallene Entitaeten entfernt", removed)
 
 
 def _legacy_map() -> dict[tuple[str, str, str], str]:
@@ -185,6 +211,8 @@ def _adopt_legacy_entities(hass: HomeAssistant) -> dict[str, str]:
     """
     registry = er.async_get(hass)
     mapping = _legacy_map()
+    _remove_retired_entities(hass, entry)
+
     adopted: dict[str, str] = {}
     blocked: list[str] = []
 

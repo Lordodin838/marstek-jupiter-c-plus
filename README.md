@@ -47,7 +47,7 @@ Grund.
 
 ## Entitäten
 
-51 Entitäten, alle am Gerät „Marstek Jupiter C+". Die Entity-IDs leitet
+46 Entitäten, alle am Gerät „Marstek Jupiter C+". Die Entity-IDs leitet
 Home Assistant aus dem Gerätenamen und dem Entitätsnamen ab
 (`sensor.marstek_jupiter_c_pv1_leistung` und so weiter); umbenennen lässt
 sich jede einzelne in der Oberfläche.
@@ -130,13 +130,13 @@ sichtbar nachlässt.
 | MAC-Adresse | `0x1100`–`0x1105`, ASCII | 1 h |
 | Kommunikationsmodul-Firmware | `0x1200`–`0x1205`, ASCII | 1 h |
 
-Standardmäßig **abgeschaltet**, weil ihre Bedeutung nicht geklärt ist:
-Gerätetyp (Code), Temperatur roh, Diagnose `0x0012`, Diagnose `0x0023`
-und die Statusflags `0x1000`–`0x1003`, `0x1009`, `0x100A`. Sie kommen im
-Block ohnehin mit und kosten keine zusätzliche Anfrage — wer
-weitersuchen will, schaltet sie in der Oberfläche ein.
+Standardmäßig **abgeschaltet**: Gerätetyp (Code) und Temperatur roh.
 
-`0x0024` wird mitgelesen, aber nicht ausgewertet: vier Tage konstant 0.
+Die ungeklärten Register `0x0012`, `0x0023`, `0x0024` und die
+Statusflags `0x1000`–`0x1003`, `0x1009`, `0x100A` werden mitgelesen, haben
+aber seit 1.1.0 keine eigenen Entitäten mehr. Wer sie untersuchen will,
+nimmt die Dienste `read_register` oder `register_dump`. Die bis 1.0.0
+angelegten Einträge entfernt die Integration beim Start selbst.
 
 ### Was das Gerät nicht liefert
 
@@ -235,7 +235,7 @@ neu hinzufügen.
 | `jupiter_modbus_daily/monthly_generation/grid` (modbus) | Energiezähler |
 | `jupiter_modbus_cell_voltage_max/min` (modbus) | Zellspannungen |
 | `jupiter_modbus_*_version`, `_device_id`, `_device_type`, `_mac`, `_comm_version` (modbus) | Diagnose |
-| `jupiter_diag_0011/0012/0023` (modbus) | Fehlercode, Diagnose |
+| `jupiter_diag_0011` (modbus) | Fehlercode |
 | `jupiter_modbus_pv1..4_status`, `jupiter_modbus_inv_status` (modbus) | Statusflags |
 | `jupiter_modbus_total_pv_power` (template) | PV-Gesamtleistung |
 | `jupiter_battery_power_calculated` (template) | Batterieleistung berechnet |

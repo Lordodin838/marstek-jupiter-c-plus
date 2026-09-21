@@ -200,12 +200,6 @@
       },
       "comm_firmware": {
         "name": "Kommunikationsmodul-Firmware"
-      },
-      "diag_0012": {
-        "name": "Diagnose 0x0012"
-      },
-      "diag_0023": {
-        "name": "Diagnose 0x0023"
       }
     },
     "binary_sensor": {

@@ -46,8 +46,6 @@ from .const import (
     ADDR_PV_POWER,
     ADDR_PV_VOLTAGE,
     ADDR_TEMPERATURE,
-    ADDR_UNKNOWN_0012,
-    ADDR_UNKNOWN_0023,
     ADDR_VERSION_BMS,
     ADDR_VERSION_EMS,
     ADDR_VERSION_INV,
@@ -497,48 +495,10 @@ SENSORS: tuple[JupiterSensorDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         legacy_unique_id="jupiter_modbus_comm_version",
     ),
-    # --- Verbliebene unbekannte Register ---------------------------------
-    # 0x0012: konstant 0 ueber Tage, liegt neben dem Fehlercode und blieb
-    #         wie der MQTT-Alarmcode unbewegt - konsistent mit "Alarmcode",
-    #         aber unbewiesen, weil nie ein Alarm kam.
-    # 0x0023: 36 bis 39, engbandig, sprang beim Firmware-Update von ~51
-    #         auf ~37. Als Strom, Spannung und SoC widerlegt.
-    # 0x0024 wird nicht mehr ausgewertet (vier Tage konstant 0), kommt im
-    # Block aber ohnehin mit.
-    JupiterSensorDescription(
-        key="diag_0012",
-        translation_key="diag_0012",
-        addresses=(ADDR_UNKNOWN_0012,),
-        value_fn=_signed(ADDR_UNKNOWN_0012),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        legacy_unique_id="jupiter_diag_0012",
-    ),
-    JupiterSensorDescription(
-        key="diag_0023",
-        translation_key="diag_0023",
-        addresses=(ADDR_UNKNOWN_0023,),
-        value_fn=_raw(ADDR_UNKNOWN_0023),
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        legacy_unique_id="jupiter_diag_0023",
-    ),
-    # Die uebrigen Statusflags. Sie kommen im Statusblock ohnehin mit und
-    # kosten nichts extra; standardmaessig abgeschaltet, weil ihre
-    # Bedeutung nicht geklaert ist. Wer weitersuchen will, schaltet sie
-    # ein. 0x1001 stand einmal auf 2 - der Block enthaelt also nicht nur
-    # 0 und 1, deshalb hier als Zahl und nicht als Ja/Nein.
-    *[
-        JupiterSensorDescription(
-            key=f"status_{addr:04x}",
-            name=f"Status 0x{addr:04X}",
-            addresses=(addr,),
-            value_fn=_raw(addr),
-            entity_category=EntityCategory.DIAGNOSTIC,
-            entity_registry_enabled_default=False,
-        )
-        for addr in (0x1000, 0x1001, 0x1002, 0x1003, 0x1009, 0x100A)
-    ],
+    # Die ungeklaerten Register 0x0012, 0x0023 und die Statusflags
+    # 0x1000-0x1003, 0x1009, 0x100A hatten bis 1.0.0 eigene (abgeschaltete)
+    # Entitaeten. Seit 1.1.0 nicht mehr - wer sie untersuchen will, nimmt
+    # die Dienste read_register oder register_dump.
 )
 
 

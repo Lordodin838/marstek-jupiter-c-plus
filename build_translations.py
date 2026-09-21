@@ -47,8 +47,6 @@ SENSOR_NAMES = {
     "device_type_text": ("Gerätetyp", "Device type"),
     "mac_address": ("MAC-Adresse", "MAC address"),
     "comm_firmware": ("Kommunikationsmodul-Firmware", "Communication module firmware"),
-    "diag_0012": ("Diagnose 0x0012", "Diagnostic 0x0012"),
-    "diag_0023": ("Diagnose 0x0023", "Diagnostic 0x0023"),
 }
 
 BINARY_NAMES = {
