@@ -15,6 +15,10 @@
   <a href="https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs/actions/workflows/validate.yml"><img src="https://img.shields.io/github/actions/workflow/status/Lordodin838/marstek-jupiter-c-plus-hacs/validate.yml?label=Tests" alt="Tests"></a>
 </p>
 
+<p align="center">
+  <b>🇩🇪 Deutsch</b> · <a href="https://github.com/Lordodin838/marstek-jupiter-c-plus-hacs/blob/main/README.en.md">🇬🇧 English</a>
+</p>
+
 ---
 
 ## Auf einen Blick
