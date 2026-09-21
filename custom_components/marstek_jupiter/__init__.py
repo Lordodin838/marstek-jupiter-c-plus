@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
@@ -27,6 +28,7 @@ from .const import (
     DEFAULT_STATUS_INTERVAL,
     DEFAULT_TIMEOUT,
     DEFAULT_UNIT_ID,
+    DOMAIN,
 )
 from .coordinator import JupiterCoordinator
 from .modbus import JupiterModbusClient
@@ -51,7 +53,38 @@ def _option(entry: ConfigEntry, key: str, default):
     return entry.options.get(key, entry.data.get(key, default))
 
 
+def _check_directory_name() -> None:
+    """Warnt, wenn der Ordner nicht wie die Domain heisst.
+
+    Home Assistant sucht die Entitaetsnamen unter
+    ``component.marstek_jupiter.entity.sensor.<key>.name``. Der Teil
+    ``marstek_jupiter`` kommt aus dem ORDNERNAMEN, nicht aus der
+    manifest.json. Heisst der Ordner anders - etwa
+    ``Marstek Jupiter C+`` nach einem Entpacken von Hand -, findet HA
+    keine Uebersetzung. Die Integration laeuft dann zwar, aber jede
+    Entitaet faellt auf den Geraetenamen zurueck: alle heissen
+    "Marstek Jupiter C+" und bekommen IDs wie
+    ``sensor.marstek_jupiter_c_15``.
+
+    Das ist von aussen schwer zu erkennen, weil nichts kaputtgeht.
+    Deshalb hier eine ausdrueckliche Warnung ins Protokoll.
+    """
+    directory = Path(__file__).resolve().parent.name
+    if directory != DOMAIN:
+        _LOGGER.warning(
+            "Der Ordner dieser Integration heisst '%s', erwartet wird '%s'. "
+            "Home Assistant findet die Entitaetsnamen deshalb nicht - alle "
+            "Entitaeten heissen wie das Geraet und bekommen IDs mit "
+            "angehaengter Nummer. Ordner nach "
+            "'custom_components/%s' umbenennen und Home Assistant neu "
+            "starten. Ueber HACS installiert passiert das nicht.",
+            directory, DOMAIN, DOMAIN,
+        )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> bool:
+    _check_directory_name()
+
     client = JupiterModbusClient(
         host=entry.data[CONF_HOST],
         port=entry.data.get(CONF_PORT, DEFAULT_PORT),
