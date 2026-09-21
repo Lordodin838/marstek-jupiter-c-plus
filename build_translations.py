@@ -262,12 +262,40 @@ SERVICES = {
 }
 
 
+ISSUES = {
+    "de": {
+        "device_error": {
+            "title": "Marstek Jupiter C+ meldet Fehler {code_hex}",
+            "description": (
+                "Das Gerät meldet den Fehlercode **{code_hex}** "
+                "(Registerwert {code}): {text}.\n\n"
+                "Die Meldung verschwindet von selbst, sobald das Gerät "
+                "wieder 0 meldet. Fehlertabelle: Benutzerhandbuch, "
+                "Abschnitt 5.1."
+            ),
+        }
+    },
+    "en": {
+        "device_error": {
+            "title": "Marstek Jupiter C+ reports error {code_hex}",
+            "description": (
+                "The device reports error code **{code_hex}** "
+                "(register value {code}): {text}.\n\n"
+                "This notice disappears by itself as soon as the device "
+                "reports 0 again. Error table: user manual, section 5.1."
+            ),
+        }
+    },
+}
+
+
 def build(lang: str) -> dict:
     index = 0 if lang == "de" else 1
     return {
         "config": CONFIG[lang],
         "options": OPTIONS[lang],
         "services": SERVICES[lang],
+        "issues": ISSUES[lang],
         "entity": {
             "sensor": {
                 key: {"name": names[index]} for key, names in SENSOR_NAMES.items()

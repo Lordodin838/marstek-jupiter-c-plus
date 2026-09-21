@@ -11,6 +11,7 @@ from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import issue_registry as ir
 
 from .const import (
     CONF_ADOPT_LEGACY,
@@ -31,6 +32,7 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import JupiterCoordinator
+from .errors import ErrorWatcher, issue_id
 from .modbus import JupiterModbusClient
 from .services import async_setup_services
 
@@ -125,6 +127,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> b
         raise ConfigEntryNotReady("Keine Registerwerte gelesen")
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Fehlercode -> Reparatur-Meldung und Ereignis marstek_jupiter_error
+    watcher = ErrorWatcher(hass, coordinator, entry.entry_id)
+    entry.async_on_unload(coordinator.async_add_listener(watcher.async_check))
+    watcher.async_check()
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     async_setup_services(hass)
     return True
@@ -135,6 +142,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> 
     if unloaded:
         await entry.runtime_data.coordinator.client.close()
     return unloaded
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: JupiterConfigEntry) -> None:
+    """Integration entfernt: eine offene Fehlermeldung mitnehmen."""
+    ir.async_delete_issue(hass, DOMAIN, issue_id(entry.entry_id))
 
 
 async def _async_reload(hass: HomeAssistant, entry: JupiterConfigEntry) -> None:

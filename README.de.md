@@ -31,7 +31,7 @@
   entladen, ohne Riemann-Helfer
 - 🛡️ **Robust gegen die Eigenheiten des Elfin** – verirrte und
   verspätete Antworten werden erkannt und verworfen
-- 🧾 **Fehlercode im Klartext** – nach der Tabelle aus dem Handbuch
+- 🧾 **Fehlercode im Klartext** – als Meldung unter *Reparaturen* und als Ereignis für Push-Nachrichten
 - 🔁 **Umstieg von YAML ohne Datenverlust** – bisherige Entity-IDs samt
   Verlauf werden übernommen
 
@@ -187,6 +187,37 @@ zählt nur Runden, in denen die Leistungen frisch gelesen wurden; fällt
 die Verbindung länger als 60 s aus, wird die Lücke nicht hochgerechnet.
 Der Stand überlebt Neustarts. „Geladen“ enthält die Wandlungsverluste
 (rund 6 %).
+
+---
+
+## Fehlermeldungen
+
+Meldet das Gerät einen Fehlercode, zeigt Home Assistant ihn unter
+*Einstellungen → Reparaturen* an, mit dem Klartext aus dem Handbuch.
+Steht der Code wieder auf 0, verschwindet die Meldung von selbst.
+
+Zusätzlich feuert die Integration bei jeder Änderung das Ereignis
+`marstek_jupiter_error` – damit lässt sich eine Push-Nachricht bauen:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: marstek_jupiter_error
+    event_data:
+      active: true
+actions:
+  - action: notify.mobile_app_dein_handy
+    data:
+      title: "Jupiter C+ Fehler {{ trigger.event.data.code_hex }}"
+      message: "{{ trigger.event.data.description }}"
+```
+
+| Feld | Inhalt |
+|---|---|
+| `active` | `true` = Fehler steht an, `false` = behoben |
+| `code` / `code_hex` | z. B. `1062` / `0x426` |
+| `description` | Klartext aus der Tabelle des Handbuchs |
+| `previous_code` | Code vor der Änderung |
 
 ---
 

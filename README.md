@@ -30,7 +30,7 @@
   and discharged, no Riemann helpers needed
 - 🛡️ **Robust against the Elfin's quirks** – stray and late responses
   are detected and discarded
-- 🧾 **Error code in plain text** – based on the table in the manual
+- 🧾 **Error code in plain text** – as a notice under *Repairs* and as an event for push notifications
 - 🔁 **Migrate from YAML without losing data** – existing entity IDs
   and their history are adopted
 
@@ -184,6 +184,37 @@ values. It only counts rounds in which the power values were freshly
 read; if the connection drops for more than 60 s, the gap is not
 extrapolated. The counters survive restarts. “Charged” includes the
 conversion losses (about 6 %).
+
+---
+
+## Error notifications
+
+When the device reports an error code, Home Assistant shows it under
+*Settings → Repairs*, with the plain-text description from the manual.
+The notice disappears by itself once the code is back to 0.
+
+The integration also fires the event `marstek_jupiter_error` on every
+change – use it for a push notification:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: marstek_jupiter_error
+    event_data:
+      active: true
+actions:
+  - action: notify.mobile_app_your_phone
+    data:
+      title: "Jupiter C+ error {{ trigger.event.data.code_hex }}"
+      message: "{{ trigger.event.data.description }}"
+```
+
+| Field | Content |
+|---|---|
+| `active` | `true` = error present, `false` = cleared |
+| `code` / `code_hex` | e.g. `1062` / `0x426` |
+| `description` | plain text from the manual's table |
+| `previous_code` | code before the change |
 
 ---
 

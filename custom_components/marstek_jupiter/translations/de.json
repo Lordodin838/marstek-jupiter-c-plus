@@ -76,6 +76,12 @@
       }
     }
   },
+  "issues": {
+    "device_error": {
+      "title": "Marstek Jupiter C+ meldet Fehler {code_hex}",
+      "description": "Das Gerät meldet den Fehlercode **{code_hex}** (Registerwert {code}): {text}.\n\nDie Meldung verschwindet von selbst, sobald das Gerät wieder 0 meldet. Fehlertabelle: Benutzerhandbuch, Abschnitt 5.1."
+    }
+  },
   "entity": {
     "sensor": {
       "pv1_voltage": {

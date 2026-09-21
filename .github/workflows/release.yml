@@ -1,0 +1,89 @@
+name: Release
+
+# Ein Release ist genau ein Schritt:
+#   Actions -> Release -> Run workflow -> Version eintragen (z. B. 1.1.0)
+#
+# Der Workflow bricht ab, wenn
+#   - die Version in manifest.json nicht passt,
+#   - der Tag schon existiert,
+#   - in CHANGELOG.md kein Abschnitt fuer die Version steht,
+#   - die Tests fehlschlagen.
+# Sonst legt er Tag und Release an. Der Text des Releases kommt aus
+# CHANGELOG.md. HACS meldet das Update danach allen Nutzern.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version, z. B. 1.1.0 (ohne v)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Version pruefen
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          if ! echo "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::Version muss die Form 1.2.3 haben, ist aber '$VERSION'"
+            exit 1
+          fi
+          MANIFEST=$(python3 -c "import json;print(json.load(open('custom_components/marstek_jupiter/manifest.json'))['version'])")
+          if [ "$MANIFEST" != "$VERSION" ]; then
+            echo "::error::manifest.json steht auf $MANIFEST, Release soll $VERSION werden"
+            exit 1
+          fi
+          if git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::Tag $VERSION existiert schon"
+            exit 1
+          fi
+
+      - name: Versionshinweise aus CHANGELOG.md
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          python3 - <<'EOF'
+          import os, re, sys
+          version = os.environ["VERSION"]
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          match = re.search(
+              rf"^## {re.escape(version)}\b[^\n]*\n(.*?)(?=^## |\Z)",
+              text, re.S | re.M,
+          )
+          if not match or not match.group(1).strip():
+              print(f"::error::Kein Abschnitt '## {version}' in CHANGELOG.md")
+              sys.exit(1)
+          open("/tmp/notes.md", "w", encoding="utf-8").write(match.group(1).strip() + "\n")
+          EOF
+          cat /tmp/notes.md
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tests
+        run: |
+          pip install voluptuous
+          python tests/test_integration.py
+
+      - name: Tag und Release anlegen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "$VERSION" \
+            --target "$GITHUB_SHA" \
+            --title "$VERSION" \
+            --notes-file /tmp/notes.md \
+            --latest

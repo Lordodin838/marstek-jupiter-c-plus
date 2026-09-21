@@ -363,6 +363,64 @@ def test_retired_entities() -> None:
     equal("Alle acht entfallenen Schluessel sind erfasst", len(RETIRED_KEYS), 8)
 
 
+def test_error_watcher() -> None:
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.marstek_jupiter.coordinator import BlockState
+    from custom_components.marstek_jupiter.errors import (
+        EVENT_ERROR,
+        ErrorWatcher,
+        issue_id,
+    )
+
+    class Bus:
+        def __init__(self):
+            self.events = []
+
+        def async_fire(self, name, data):
+            self.events.append((name, data))
+
+    class Hass:
+        bus = Bus()
+
+    class FakeCoordinator:
+        data = JupiterData(blocks={b.key: BlockState() for b in const.BLOCKS})
+
+    hass, coordinator = Hass(), FakeCoordinator()
+    block = const.block_for_address(const.ADDR_ERROR_CODE)
+    watcher = ErrorWatcher(hass, coordinator, "entry")
+    key = ("marstek_jupiter", issue_id("entry"))
+
+    # Noch kein frischer Wert: nichts tun
+    coordinator.data.registers[const.ADDR_ERROR_CODE] = 1062
+    watcher.async_check()
+    check("Ohne frischen Block keine Meldung", key not in ir.ISSUES, "")
+
+    coordinator.data.blocks[block].last_success = 1.0
+    coordinator.data.registers[const.ADDR_ERROR_CODE] = 0
+    watcher.async_check()
+    equal("Start ohne Fehler: kein Ereignis", hass.bus.events, [])
+
+    coordinator.data.registers[const.ADDR_ERROR_CODE] = 1062
+    watcher.async_check()
+    check("Fehler 1062 legt Reparatur-Meldung an", key in ir.ISSUES, str(ir.ISSUES))
+    equal("Meldung zeigt 0x426",
+          ir.ISSUES[key]["translation_placeholders"]["code_hex"], "0x426")
+    equal("Ereignis bei neuem Fehler",
+          [(n, d["active"], d["code"]) for n, d in hass.bus.events],
+          [(EVENT_ERROR, True, 1062)])
+
+    watcher.async_check()
+    equal("Gleicher Code: kein zweites Ereignis", len(hass.bus.events), 1)
+
+    coordinator.data.registers[const.ADDR_ERROR_CODE] = 0
+    watcher.async_check()
+    check("Code 0 nimmt die Meldung zurueck", key not in ir.ISSUES, "")
+    equal("Ereignis beim Zuruecksetzen",
+          (hass.bus.events[-1][1]["active"], hass.bus.events[-1][1]["previous_code"]),
+          (False, 1062))
+
+
 async def test_energy_restore() -> None:
     from custom_components.marstek_jupiter.coordinator import ENERGY_PV
 
@@ -396,6 +454,7 @@ async def main() -> int:
     test_request_budget()
     test_energy_counters()
     test_retired_entities()
+    test_error_watcher()
     await test_energy_restore()
     await test_transport()
     await test_stray_response()

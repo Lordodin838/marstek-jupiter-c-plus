@@ -76,6 +76,12 @@
       }
     }
   },
+  "issues": {
+    "device_error": {
+      "title": "Marstek Jupiter C+ reports error {code_hex}",
+      "description": "The device reports error code **{code_hex}** (register value {code}): {text}.\n\nThis notice disappears by itself as soon as the device reports 0 again. Error table: user manual, section 5.1."
+    }
+  },
   "entity": {
     "sensor": {
       "pv1_voltage": {
