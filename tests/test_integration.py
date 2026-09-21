@@ -309,6 +309,12 @@ def test_energy_counters() -> None:
         data = JupiterData(blocks={b.key: BlockState() for b in const.BLOCKS})
         return coordinator, data
 
+    # Regression 1.0.0: mit always_update=False blieben alle Entitaeten
+    # nach dem ersten Wert stehen, weil jede Runde dasselbe Objekt liefert.
+    coordinator, data = fresh_coordinator()
+    check("Coordinator benachrichtigt nach jeder Runde (always_update)",
+          coordinator.always_update is True, "always_update ist nicht True")
+
     # Eine Stunde lang 1000 W PV, 400 W ans Netz -> 600 W in die Batterie.
     coordinator, data = fresh_coordinator()
     for step in range(361):
