@@ -280,17 +280,97 @@ def test_request_budget() -> None:
           f"(bisherige YAML-Loesung: rund 48)")
 
 
-def test_coordinator_notifies() -> None:
-    """Regression 1.0.0: mit always_update=False blieben alle Entitaeten
-    nach dem ersten Wert stehen, weil jede Runde dasselbe Objekt liefert."""
-    from custom_components.marstek_jupiter.coordinator import JupiterCoordinator
+def _energy_round(coordinator, data, now, pv, grid, fresh=True) -> None:
+    """Eine Abfragerunde nachstellen: Register setzen, Bloecke markieren."""
+    for n, address in enumerate(const.ADDR_PV_POWER):
+        data.registers[address] = pv[n]
+    data.registers[const.ADDR_GRID_POWER] = grid & 0xFFFF
+    for key in ("fast_a", "fast_b"):
+        if fresh:
+            data.blocks[key].last_success = now
+    coordinator._integrate_energy(data, now)
 
-    coordinator = JupiterCoordinator(
-        None, None, config_entry=None, fast_interval=10, slow_interval=60,
-        status_interval=300, static_interval=3600, entry_title="Test",
+
+def test_energy_counters() -> None:
+    from custom_components.marstek_jupiter.coordinator import (
+        ENERGY_CHARGE,
+        ENERGY_DISCHARGE,
+        ENERGY_PV,
+        BlockState,
+        JupiterCoordinator,
     )
-    check("Coordinator benachrichtigt nach jeder Runde (always_update)",
-          coordinator.always_update is True, "always_update ist nicht True")
+
+    def fresh_coordinator():
+        coordinator = JupiterCoordinator(
+            None, None, config_entry=None, fast_interval=10,
+            slow_interval=60, status_interval=300, static_interval=3600,
+            entry_title="Test",
+        )
+        data = JupiterData(blocks={b.key: BlockState() for b in const.BLOCKS})
+        return coordinator, data
+
+    # Eine Stunde lang 1000 W PV, 400 W ans Netz -> 600 W in die Batterie.
+    coordinator, data = fresh_coordinator()
+    for step in range(361):
+        _energy_round(coordinator, data, step * 10.0, (250, 250, 250, 250), 400)
+    equal("PV-Energie nach 1 h bei 1000 W", round(data.energy[ENERGY_PV], 3), 1.0)
+    equal("Geladen nach 1 h bei 600 W", round(data.energy[ENERGY_CHARGE], 3), 0.6)
+    equal("Entladen bleibt 0 beim Laden", data.energy[ENERGY_DISCHARGE], 0.0)
+
+    # Nachts: keine PV, 500 W ans Netz -> Batterie entlaedt mit 500 W.
+    coordinator, data = fresh_coordinator()
+    for step in range(361):
+        _energy_round(coordinator, data, step * 10.0, (0, 0, 0, 0), 500)
+    equal("Entladen nach 1 h bei 500 W",
+          round(data.energy[ENERGY_DISCHARGE], 3), 0.5)
+    equal("Geladen bleibt 0 beim Entladen", data.energy[ENERGY_CHARGE], 0.0)
+
+    # Netzbezug (negativ) wird als int16 gelesen, nicht als 65000 W.
+    coordinator, data = fresh_coordinator()
+    for step in range(361):
+        _energy_round(coordinator, data, step * 10.0, (0, 0, 0, 0), -200)
+    equal("Netzbezug laedt die Batterie (200 W, 1 h)",
+          round(data.energy[ENERGY_CHARGE], 3), 0.2)
+
+    # Veraltete Register (Block nicht frisch) zaehlen nicht.
+    coordinator, data = fresh_coordinator()
+    _energy_round(coordinator, data, 0.0, (250, 250, 250, 250), 0)
+    _energy_round(coordinator, data, 10.0, (250, 250, 250, 250), 0, fresh=False)
+    equal("Runde mit altem Stand zaehlt nicht", data.energy[ENERGY_PV], 0.0)
+
+    # Laengere Luecke wird nicht hochgerechnet.
+    coordinator, data = fresh_coordinator()
+    _energy_round(coordinator, data, 0.0, (250, 250, 250, 250), 0)
+    _energy_round(coordinator, data, 600.0, (250, 250, 250, 250), 0)
+    equal("10-Minuten-Luecke wird nicht ueberbrueckt", data.energy[ENERGY_PV], 0.0)
+    _energy_round(coordinator, data, 610.0, (250, 250, 250, 250), 0)
+    equal("Danach zaehlt es normal weiter",
+          round(data.energy[ENERGY_PV] * 3600, 3), round(10 / 1000 * 1000, 3))
+
+
+async def test_energy_restore() -> None:
+    from custom_components.marstek_jupiter.coordinator import ENERGY_PV
+
+    class Last:
+        native_value = "43.419"
+
+    class FakeCoordinator:
+        data = JupiterData()
+        last_update_success = True
+
+    coordinator = FakeCoordinator()
+    coordinator.data.energy[ENERGY_PV] = 0.25   # schon vor dem Anmelden gezaehlt
+    description = next(d for d in sn.ENERGY_SENSORS if d.key == ENERGY_PV)
+    sensor = sn.JupiterEnergySensor(coordinator, "entry", description)
+    sensor._last_sensor_data = Last()
+    await sensor.async_added_to_hass()
+    equal("Zaehler setzt beim gespeicherten Stand fort", sensor.native_value, 43.419)
+    coordinator.data.energy[ENERGY_PV] += 0.1
+    equal("und zaehlt von dort weiter", sensor.native_value, 43.519)
+    check("PV-Energie ist total_increasing in kWh",
+          description.state_class == "total_increasing"
+          and description.native_unit_of_measurement == "kWh"
+          and description.device_class == "energy", repr(description))
 
 
 async def main() -> int:
@@ -299,7 +379,8 @@ async def main() -> int:
     test_sensor_values()
     test_sanity_filter()
     test_request_budget()
-    test_coordinator_notifies()
+    test_energy_counters()
+    await test_energy_restore()
     await test_transport()
     await test_stray_response()
     await test_late_response()

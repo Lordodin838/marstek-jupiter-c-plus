@@ -50,5 +50,11 @@ async def async_get_config_entry_diagnostics(
         ),
         "verworfene_werte": data.rejected if data else None,
         "anfragen_gesamt": data.requests if data else None,
+        # seit dem Start gezaehlt, in kWh - ohne den gespeicherten Stand
+        "energie_seit_start_kwh": (
+            {key: round(value, 4) for key, value in data.energy.items()}
+            if data
+            else {}
+        ),
         "uebernommene_entity_ids": entry.runtime_data.adopted_entity_ids,
     }

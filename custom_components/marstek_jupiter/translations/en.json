@@ -123,6 +123,15 @@
       "battery_power": {
         "name": "Battery power (calculated)"
       },
+      "pv_energy": {
+        "name": "PV energy"
+      },
+      "battery_charge_energy": {
+        "name": "Battery charged"
+      },
+      "battery_discharge_energy": {
+        "name": "Battery discharged"
+      },
       "battery_voltage": {
         "name": "Battery voltage"
       },

@@ -7,6 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -57,7 +58,13 @@ from .const import (
     block_for_address,
     error_text,
 )
-from .coordinator import JupiterCoordinator, JupiterData
+from .coordinator import (
+    ENERGY_CHARGE,
+    ENERGY_DISCHARGE,
+    ENERGY_PV,
+    JupiterCoordinator,
+    JupiterData,
+)
 from .entity import JupiterEntity
 from .modbus import to_ascii, to_int16, to_uint32
 
@@ -535,6 +542,48 @@ SENSORS: tuple[JupiterSensorDescription, ...] = (
 )
 
 
+@dataclass(frozen=True, kw_only=True)
+class JupiterEnergyDescription(SensorEntityDescription):
+    """Energiezaehler, von der Integration selbst aufsummiert."""
+
+    addresses: tuple[int, ...]
+
+
+# Aufsummierte Energie fuer das Energie-Dashboard. Ersetzt die sonst
+# noetigen Riemann-Helfer ("Integral") auf PV- und Batterieleistung.
+# Der Coordinator summiert nur Runden, in denen die Leistungen frisch
+# gelesen wurden; Ausfaelle werden nicht hochgerechnet.
+ENERGY_SENSORS: tuple[JupiterEnergyDescription, ...] = (
+    JupiterEnergyDescription(
+        key=ENERGY_PV,
+        translation_key=ENERGY_PV,
+        addresses=ADDR_PV_POWER,
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+    ),
+    JupiterEnergyDescription(
+        key=ENERGY_CHARGE,
+        translation_key=ENERGY_CHARGE,
+        addresses=(*ADDR_PV_POWER, ADDR_GRID_POWER),
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+    ),
+    JupiterEnergyDescription(
+        key=ENERGY_DISCHARGE,
+        translation_key=ENERGY_DISCHARGE,
+        addresses=(*ADDR_PV_POWER, ADDR_GRID_POWER),
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=3,
+    ),
+)
+
+
 def blocks_for(addresses: tuple[int, ...]) -> tuple[str, ...]:
     keys = {block_for_address(a) for a in addresses}
     return tuple(sorted(k for k in keys if k is not None))
@@ -554,6 +603,10 @@ async def async_setup_entry(
         for description in SENSORS
     ]
     entities.append(JupiterErrorTextSensor(coordinator, entry, adopted))
+    entities.extend(
+        JupiterEnergySensor(coordinator, entry.entry_id, description)
+        for description in ENERGY_SENSORS
+    )
     async_add_entities(entities)
 
 
@@ -586,6 +639,58 @@ class JupiterSensor(JupiterEntity, SensorEntity):
         if self.coordinator.data is None:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+
+class JupiterEnergySensor(JupiterEntity, RestoreSensor):
+    """Energiezaehler, der einen Neustart ueberlebt.
+
+    Stand = zuletzt gespeicherter Wert + was der Coordinator seit dem
+    Start aufsummiert hat. Home Assistant speichert den letzten Zustand
+    selbst (RestoreSensor); verloren gehen bei einem Neustart hoechstens
+    die Sekunden seit der letzten Aktualisierung.
+    """
+
+    entity_description: JupiterEnergyDescription
+
+    def __init__(
+        self,
+        coordinator: JupiterCoordinator,
+        entry_id: str,
+        description: JupiterEnergyDescription,
+    ) -> None:
+        super().__init__(
+            coordinator,
+            entry_id,
+            description.key,
+            blocks_for(description.addresses),
+        )
+        self.entity_description = description
+        self._base = 0.0
+        # Was der Coordinator beim Wiederherstellen schon gezaehlt hatte.
+        # Nach einem Neuladen der Integration beginnt er wieder bei 0,
+        # der Sensor aber bleibt dieselbe Instanz nicht - deshalb der
+        # Abzug, damit nichts doppelt zaehlt.
+        self._offset = 0.0
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last is not None and last.native_value is not None:
+            try:
+                self._base = float(last.native_value)
+            except (TypeError, ValueError):
+                self._base = 0.0
+        data = self.coordinator.data
+        if data is not None:
+            self._offset = data.energy.get(self.entity_description.key, 0.0)
+
+    @property
+    def native_value(self) -> float | None:
+        data = self.coordinator.data
+        if data is None:
+            return round(self._base, 3)
+        counted = data.energy.get(self.entity_description.key, 0.0)
+        return round(self._base + counted - self._offset, 3)
 
 
 class JupiterErrorTextSensor(JupiterEntity, SensorEntity):

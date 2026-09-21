@@ -32,6 +32,8 @@ from .const import (
     TIER_STATUS,
     VALID_RANGES,
     ADDR_GRID_POWER,
+    ADDR_PV_POWER,
+    ENERGY_MAX_GAP,
 )
 from .modbus import (
     JupiterModbusClient,
@@ -41,6 +43,16 @@ from .modbus import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+ENERGY_PV = "pv_energy"
+ENERGY_CHARGE = "battery_charge_energy"
+ENERGY_DISCHARGE = "battery_discharge_energy"
+ENERGY_KEYS = (ENERGY_PV, ENERGY_CHARGE, ENERGY_DISCHARGE)
+
+# Beide schnellen Bloecke muessen in derselben Runde frisch gelesen sein:
+# die PV-Leistungen verteilen sich auf beide, die Netzleistung liegt im
+# zweiten.
+_ENERGY_BLOCKS = ("fast_a", "fast_b")
 
 
 @dataclass
@@ -65,6 +77,11 @@ class JupiterData:
     blocks: dict[str, BlockState] = field(default_factory=dict)
     rejected: int = 0
     requests: int = 0
+    # Seit dem Start aufsummierte Energie in kWh, je Zaehler. Die Sensoren
+    # addieren das auf ihren zuletzt gespeicherten Stand.
+    energy: dict[str, float] = field(
+        default_factory=lambda: {key: 0.0 for key in ENERGY_KEYS}
+    )
 
     def healthy(self, block_key: str | None) -> bool:
         if block_key is None:
@@ -115,6 +132,10 @@ class JupiterCoordinator(DataUpdateCoordinator[JupiterData]):
             # ohnehin selbst.
             always_update=True,
         )
+        self._energy_max_gap = max(ENERGY_MAX_GAP, 3 * fast_interval)
+        # (Zeitpunkt, PV-Leistung W, Batterieleistung W) der letzten
+        # frischen Messung
+        self._last_power: tuple[float, float, float] | None = None
 
     async def _async_update_data(self) -> JupiterData:
         now = time.monotonic()
@@ -179,7 +200,57 @@ class JupiterCoordinator(DataUpdateCoordinator[JupiterData]):
         ):
             raise fatal
 
+        self._integrate_energy(data, now)
         return data
+
+    def _integrate_energy(self, data: JupiterData, now: float) -> None:
+        """Leistung zu Energie aufsummieren (Trapezregel).
+
+        Nur Runden, in denen beide schnellen Bloecke frisch gelesen
+        wurden, zaehlen. Nach einem Fehlversuch stehen in ``registers``
+        noch die alten Werte - die duerfen nicht weiter aufaddiert werden.
+
+        Die Batterieleistung ist wie beim Sensor "Batterieleistung
+        (berechnet)" die Bilanz PV minus Netzleistung. Geladen und
+        entladen werden getrennt gezaehlt, jeweils nur der passende
+        Anteil. Wandlungsverluste (rund 6 %) stecken damit im Wert
+        "geladen" - fuer das Energie-Dashboard gut genug, fuer eine
+        genaue Bilanz sind die Geraetezaehler besser.
+        """
+        if not all(
+            data.blocks[key].last_success == now for key in _ENERGY_BLOCKS
+        ):
+            return
+
+        pv_values = [data.registers.get(a) for a in ADDR_PV_POWER]
+        grid_raw = data.registers.get(ADDR_GRID_POWER)
+        if any(v is None for v in pv_values) or grid_raw is None:
+            self._last_power = None
+            return
+        pv = float(sum(v for v in pv_values if v is not None))
+        battery = pv - to_int16(grid_raw)
+
+        previous = self._last_power
+        self._last_power = (now, pv, battery)
+        if previous is None:
+            return
+
+        seconds = now - previous[0]
+        if seconds <= 0 or seconds > self._energy_max_gap:
+            # Zu lange Luecke: neu ansetzen statt hochrechnen.
+            _LOGGER.debug(
+                "Energiezaehler: Luecke von %.0f s nicht ueberbrueckt", seconds
+            )
+            return
+
+        hours = seconds / 3600
+        data.energy[ENERGY_PV] += (previous[1] + pv) / 2 * hours / 1000
+        data.energy[ENERGY_CHARGE] += (
+            (max(previous[2], 0.0) + max(battery, 0.0)) / 2 * hours / 1000
+        )
+        data.energy[ENERGY_DISCHARGE] += (
+            (max(-previous[2], 0.0) + max(-battery, 0.0)) / 2 * hours / 1000
+        )
 
     def _store(self, data: JupiterData, start: int, values: list[int]) -> int:
         """Uebernimmt Rohwerte und verwirft Unplausibles.

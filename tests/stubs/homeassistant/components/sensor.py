@@ -32,3 +32,10 @@ class SensorStateClass(StrEnum):
 class SensorEntity:
     entity_id = None
     hass = None
+
+class RestoreSensor(SensorEntity):
+    _last_sensor_data = None
+    async def async_added_to_hass(self):
+        pass
+    async def async_get_last_sensor_data(self):
+        return self._last_sensor_data

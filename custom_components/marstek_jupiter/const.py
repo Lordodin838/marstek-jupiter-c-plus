@@ -35,6 +35,12 @@ DEFAULT_MESSAGE_WAIT: Final = 0.15
 # soll noch keine Luecke im Verlauf reissen.
 FAILURES_BEFORE_UNAVAILABLE: Final = 3
 
+# Energiezaehler: laengste Luecke zwischen zwei frischen Messungen, die
+# noch ueberbrueckt wird. Faellt der schnelle Block laenger aus, wird die
+# Luecke NICHT hochgerechnet - lieber etwas zu wenig zaehlen als eine
+# Leistung ueber Minuten fortschreiben, die es so nicht gab.
+ENERGY_MAX_GAP: Final = 60
+
 TIER_FAST: Final = "fast"
 TIER_SLOW: Final = "slow"
 TIER_STATUS: Final = "status"

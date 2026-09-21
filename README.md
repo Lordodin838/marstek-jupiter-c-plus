@@ -81,6 +81,30 @@ Batterieleistung heißt laden.
 Alle vier mit `state_class: total_increasing` — direkt für das
 Energie-Dashboard geeignet.
 
+### Aufsummierte Energie (seit 1.1.0)
+
+Die Gerätezähler oben messen auf der AC-Seite und kennen weder die
+PV-Eingangsenergie noch Laden und Entladen der Batterie. Diese drei
+Zähler summiert die Integration selbst aus den 10-s-Leistungswerten:
+
+| Entität | Quelle | Einheit |
+|---|---|---|
+| PV Energie | PV Gesamtleistung | kWh |
+| Batterie geladen | positiver Anteil der Batterieleistung (berechnet) | kWh |
+| Batterie entladen | negativer Anteil der Batterieleistung (berechnet) | kWh |
+
+Damit braucht das Energie-Dashboard keine Riemann-Helfer mehr:
+**Solar** → *PV Energie*, **Batterie** → *Batterie geladen* /
+*Batterie entladen*.
+
+* Gezählt wird nur, wenn PV- und Netzleistung in derselben Runde frisch
+  gelesen wurden. Fällt die Verbindung länger als 60 s aus, wird die
+  Lücke nicht hochgerechnet — lieber etwas zu wenig als erfunden.
+* Der Stand überlebt Neustarts (Home Assistant speichert den letzten
+  Wert).
+* „Geladen“ enthält die Wandlungsverluste (rund 6 %), weil die
+  Batterieleistung aus der Bilanz PV − Netzleistung stammt.
+
 ### Batterie (Takt 60 s)
 
 | Entität | Register | Einheit |
